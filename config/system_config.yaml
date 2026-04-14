@@ -1,9 +1,4 @@
 # YAML file for the system
-
-# IMPORTANT NOTE
-# The system will first look for system_config.yaml file under ~/.config/cgras_detector
-# If the file is not found, then the system will copy the default file cgras_detector/config/system.config.yaml to ~/.config/cgras_detector and then use the one under the .config folder 
-
 ---
 cgras_detector:
   # WEB INTERFACE
@@ -39,12 +34,12 @@ cgras_detector:
   # OPERATION
   # the data folder
   cgras_data_folder: ~/cgras_data
-  disk_space_min: 10.0                   # GBytes
+  disk_space_min: 2.0                   # GBytes
   # the import image folder
   # cgras_captured_images_folder: /home/qcr/cgras_data/images/{tile_id}_{batch_id}/Export
 
   # automation mode (whether the task execution is automated)
-  task_automation: False  
+  task_automation: True 
 
   # yolo model range
   max_coral_age: 120  # days
@@ -59,13 +54,13 @@ cgras_detector:
   reco_model_filename: reco_model.yaml          # for developers' use and not to be adjusted
   loctile_model_filename: loctile_model.yaml    # for developers' use and not to be adjusted
   cod_model_filename: coral_object_detect_model.yaml  # for developers' use and not to be adjusted
-  reco_working_scale: 0.10                # the scale at which the reconstruction process operate on the images, default 0.10
-  reco_debug_images_at_original_scale: False
+  reco_working_scale: 0.08                     # the scale at which the reconstruction process operate on the images, default 0.10
+  reco_debug_images_at_original_scale: True
   reco_debug_feature_matching_images: True
   reco_feature_detectors: ['brisk', 'sift']     # sift, orb, brisk, akaze 
-  reco_feature_matching_confidence_threshold: 1.0    # default 1.0
-  reco_image_matching_min_confidence: 1.0      # between rows matching confidence, default 1.0
-  reco_image2d_matching_min_confidence: 1.0    # row matching confidence, default 1.0
+  reco_feature_matching_confidence_threshold: 0.8    # default 1.2
+  reco_image_matching_min_confidence: 0.8   # between rows matching confidence, default 1.2
+  reco_image2d_matching_min_confidence: 0.8 # row matching confidence, default 1.2
   # reco_error_correction: False            # for developers' use and not to be adjusted
   reco_aspect_ratio_roi_error_rel: 0.1           # the maximum relative error of aspect ratio of rois from that of the original image (default: 0.1)
   reco_misplaced_roi_erro_rel: 0.1               # the maximum relative error of roi corner placement with respect to the roi sizes (default 0.1)
@@ -75,12 +70,12 @@ cgras_detector:
   # frame_size_in_mm: [280, 280] # default value, only if not defined in the metadata of the tile_sample 
 
   # detection task parameters: locate tile
-  loctile_pixel_classifier_filename: train_set_20250905.model
+  loctile_pixel_classifier_filename: train_set_20250922_hsv.model   # ORIGINAL -> train_set_20250905.model
   loctile_rotate_angle_max: 3.0   # degrees
   loctile_aspect_ratio_diff_max_rel: 0.05   # 0.05 relative difference
   loctile_aspect_ratio_diff_max_abs: 0.05   # 0.05 absolute difference
   loctile_template_size: 120                     # pixels, default 60
-  loctile_template_corner_size: 12                 # pixels, default 12
+  loctile_template_corner_size: 20                 # pixels, default 12
   # detection task parameters: object detection  
 
   cod_debug_blob_images: True
