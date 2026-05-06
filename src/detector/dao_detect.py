@@ -92,7 +92,7 @@ DETECT_DDL = {
     CREATE TABLE IF NOT EXISTS yolo_model (
         id integer PRIMARY KEY AUTOINCREMENT,
         name text,
-        model_file_path text, 
+        model_file_path text,
         input_image_width integer,
         input_image_height interger,
         species text,
@@ -102,6 +102,7 @@ DETECT_DDL = {
         remarks text,
         predict_params_yaml text,
         keep_object_filter_yaml text,
+        is_active integer DEFAULT 1,
         UNIQUE (name)
     );
     """,
@@ -306,6 +307,19 @@ class CoralObject():
 class DetectorDAO():
     def __init__(self, db_file:str, **kwargs):
         self.db_file = db_file
+        self._migrate_yolo_model_columns()
+
+    def _migrate_yolo_model_columns(self):
+        try:
+            with db_tools.create_connection(self.db_file) as conn:
+                c = conn.cursor()
+                existing = {row[1] for row in c.execute('PRAGMA table_info(yolo_model)').fetchall()}
+                if 'is_active' not in existing:
+                    c.execute('ALTER TABLE yolo_model ADD COLUMN is_active integer DEFAULT 1')
+                    c.execute('UPDATE yolo_model SET is_active = 1')
+                    conn.commit()
+        except Exception:
+            pass
 
     # functions for validate the database
     # return True if there is at least one tile, one tank, one station, and one pattern for the operation
@@ -778,8 +792,13 @@ class DetectorDAO():
                 classes_map[class_cat] = []
                 
     @synchronized
+    def set_yolo_model_active(self, name:str, is_active:int) -> int:
+        sql = 'UPDATE yolo_model SET is_active = ? WHERE name = ?'
+        return db_tools.update(self.db_file, sql, (is_active, name,))
+
+    @synchronized
     def query_yolo_model(self, species, days_since_settle) -> list:
-        sql = 'SELECT * FROM yolo_model WHERE species = ? AND (? >= start_day) AND (end_day == -1 or ? <= end_day) ORDER BY start_day ASC'
+        sql = 'SELECT * FROM yolo_model WHERE species = ? AND (? >= start_day) AND (end_day == -1 or ? <= end_day) AND is_active = 1 ORDER BY start_day ASC'
         result_list = db_tools.query_for_list_of_dicts(self.db_file, sql, (species, days_since_settle, days_since_settle,))  
         for result in result_list: 
             try:

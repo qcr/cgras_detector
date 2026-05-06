@@ -130,11 +130,11 @@ class DetectionTaskModel():
         except Exception as e:
             raise DetectorFailed(DetectorExceptionCodes.INPUT_DATA_INVALID, f'Invalid date/time format in batch time or settle time', e = e)
         
-        # resolve the suitable yolo model for this tile
+        # resolve the active yolo models for this tile (may be empty — stitching-only mode)
         self.yolo_model_dict_list = DETECT_DAO.query_yolo_model(self.species, self.days_since_settle)
-        if self.yolo_model_dict_list is None or len(self.yolo_model_dict_list) == 0:
-            logger.warning(f'{type(self).__name__}: No suitable yolo model for species ({self.species}) and days_since_settlement ({self.days_since_settle}) is found')
-            raise DetectorAborted(DetectorExceptionCodes.YOLO_MODEL_UNDEFINED, f'No suitable yolo model: species ({self.species}) and days_since_settlement ({self.days_since_settle})') 
+        if not self.yolo_model_dict_list:
+            logger.warning(f'{type(self).__name__}: No active yolo model for species ({self.species}) days_since_settle ({self.days_since_settle}) — running in stitching/tile-location-only mode')
+            self.yolo_model_dict_list = [] 
         # just pick the first one if more than one yolo model is suitable
         # self.yolo_model_dict = self.yolo_model_list[0]
 
@@ -252,12 +252,45 @@ class DetectionTaskModel():
         if self.loctile_model is None:
             self.loctile_model = LocateTileModel(self.image_map_as_list, map_location_fn=self.reco_model.map_locations, image_size_in_px=self.reco_model.get_whole_reco_image_size(), **self.params)
             if self.to_cancel:
-                self.progress_model.end_stage(ProgressStages.LOCTILE)  
+                self.progress_model.end_stage(ProgressStages.LOCTILE)
                 raise DetectorCancelled(DetectorExceptionCodes.CANCELLED_BY_SYSTEM, 'Received an cancel command from the system')
             self.loctile_model.build()
             LocateTileModelHelper.to_yaml(self.loctile_model, loctile_model_file)
+        if self.params.get(ModelsConfigNames.RECO_TAB_GRID_IMAGE.value, True):
+            self._draw_tab_grid_images()
         self.progress_model.end_stage(ProgressStages.LOCTILE)
-                
+
+    def _draw_tab_grid_images(self):
+        if not self.logdata_folder:
+            return
+        n_cols = self.tile_sample_dict.get('tab_ncols', 20)
+        n_rows = self.tile_sample_dict.get('tab_nrows', 20)
+        if n_cols is None or n_cols <= 0:
+            n_cols = 20
+        if n_rows is None or n_rows <= 0:
+            n_rows = 20
+        tile_origin = self.loctile_model.get_tile_origin_in_image_space()
+        tile_size = self.loctile_model.get_tile_size_in_image_space()
+        # working-scale tab grid image
+        rotated_image_file = os.path.join(self.logdata_folder, LocateTileModel.ROTATED_WHOLE_RECO_IMAGE_FILENAME)
+        if os.path.isfile(rotated_image_file):
+            image = cv2.imread(rotated_image_file)
+            if image is not None:
+                output_file = os.path.join(self.logdata_folder, 'rotated_whole_reco_image_tab_grid.jpg')
+                CoralObjectDetectModel.draw_tab_grid_on_image(image, self.working_scale, tile_origin, tile_size, n_cols, n_rows, output_file)
+        # full-scale tab grid image — scale line width and font proportionally to 1/working_scale
+        full_scale_reco_file = os.path.join(self.logdata_folder, LocateTileModel.FILENAME_WHOLE_RECO_FULL_SCALE_IMAGE)
+        if os.path.isfile(full_scale_reco_file):
+            image = cv2.imread(full_scale_reco_file)
+            if image is not None:
+                M = self.loctile_model.affine_transform_matrix
+                rotated = cv2.warpAffine(image, M, (int(image.shape[1] * 1.1), int(image.shape[0] * 1.1)))
+                output_file = os.path.join(self.logdata_folder, 'rotated_whole_reco_original_image_tab_grid.jpg')
+                scale_factor = max(1.0, 1.0 / self.working_scale)
+                CoralObjectDetectModel.draw_tab_grid_on_image(rotated, 1.0, tile_origin, tile_size, n_cols, n_rows, output_file,
+                                                              line_width=max(1, round(scale_factor)),
+                                                              font_size=0.6 * scale_factor)
+
     def execute_task_object_detection(self):
         self.progress_model.start_stage(ProgressStages.OBJECT_DETECT)
         self.progress_model.update_stage_progress(ProgressStages.OBJECT_DETECT, 0, self.image_grid_dim[0] * self.image_grid_dim[1])
@@ -270,9 +303,13 @@ class DetectionTaskModel():
             logger.info(f'{type(self).__name__}: No valid cached file. Building the CoralObjectDetectModel from capture images, reco model, loctile model, and yolo model')
             
         if self.cod_model is None:
+            if not self.yolo_model_dict_list:
+                logger.info(f'{type(self).__name__}: No active yolo models — skipping object detection')
+                self.progress_model.end_stage(ProgressStages.OBJECT_DETECT)
+                return
             yolo_detector_model_list = []
             if self.to_cancel:
-                self.progress_model.end_stage(ProgressStages.OBJECT_DETECT)  
+                self.progress_model.end_stage(ProgressStages.OBJECT_DETECT)
                 raise DetectorCancelled(DetectorExceptionCodes.CANCELLED_BY_SYSTEM, 'Received an cancel command from the system')
             for yolo_model_dict in self.yolo_model_dict_list:
                 yolo_model_file =  yolo_model_dict['model_file_path']
@@ -282,14 +319,14 @@ class DetectionTaskModel():
                 keep_object_filter = yolo_model_dict['keep_object_filter']
                 try:
                     logger.info(f'{type(self).__name__}: Attempting to load the yolo_model_file at {yolo_model_file}')
-                    yolo_detector_model:YoloObjectDetector = YoloObjectDetector(yolo_model_file, blob_size, classes_map, predict_params, keep_object_filter) 
+                    yolo_detector_model:YoloObjectDetector = YoloObjectDetector(yolo_model_file, blob_size, classes_map, predict_params, keep_object_filter)
                     yolo_detector_model_list.append(yolo_detector_model)
                 except Exception as e:
                     logger.info(f'{type(self).__name__}: Failed to load the yolo model file: {e}')
                     raise DetectorAborted(DetectorExceptionCodes.YOLO_MODEL_FILE_ERROR, f'Failed to load the yolo model file ({yolo_model_file})', e = e)
-            # raise execption if the current job is cancelled
+            # raise exception if the current job is cancelled
             if self.to_cancel:
-                self.progress_model.end_stage(ProgressStages.OBJECT_DETECT)  
+                self.progress_model.end_stage(ProgressStages.OBJECT_DETECT)
                 raise DetectorCancelled(DetectorExceptionCodes.CANCELLED_BY_SYSTEM, 'Received an cancel command from the system')
             # build the cod model
             logger.info(f'DetectionTaskModel build COD for images of the tile sample ({self.tile_sample_id}) using yolo model file: {yolo_model_file}')
@@ -299,7 +336,7 @@ class DetectionTaskModel():
                                                     self._execute_task_object_detection_cb, **self.params)
             self.cod_model.build()
             try:
-                CoralObjectDetectModelHelper.to_yaml_file(self.cod_model, cod_model_file)  
+                CoralObjectDetectModelHelper.to_yaml_file(self.cod_model, cod_model_file)
             except Exception as e:
                 raise DetectorAborted(DetectorExceptionCodes.OS_ERROR, f'Failed to write cod model to yaml file {cod_model_file}', e=e)
             
@@ -332,32 +369,33 @@ class DetectionTaskModel():
             self.progress_model.update_stage_progress(ProgressStages.OBJECT_DETECT, *progress_tuple)   
          
     def execute_task_record(self):
-        self.progress_model.start_stage(ProgressStages.COLLECT_STAT)        
-        # extract statistics of the tile 
+        self.progress_model.start_stage(ProgressStages.COLLECT_STAT)
+        # extract statistics of the tile
         self.detection_stat['tile_pixel_x'], self.detection_stat['tile_pixel_y'] = self.loctile_model.get_tile_size_in_image_space()
-        # detection of coral objects is completed, save the results to the database
-        num_objects = self.cod_model.get_num_objects()
-        num_invalid_objects = self.cod_model.get_num_invalidated_objects()
-        logger.info(f'{type(self).__name__}: Saving objects of all classes to database (valid/all): {num_objects - num_invalid_objects} {num_objects}')
-        
-        DETECT_DAO.delete_detected_objects_of_tile_sample(self.tile_sample_id)  # DB operation
-         
         if self.to_cancel:
-            self.progress_model.end_stage(ProgressStages.COLLECT_STAT) 
+            self.progress_model.end_stage(ProgressStages.COLLECT_STAT)
             raise DetectorCancelled(DetectorExceptionCodes.CANCELLED_BY_SYSTEM, 'Received an cancel command from the system')
         try:
-            # stat = self._process_detected_objects(self.cod_model)    # DB operation
-            stat = DETECT_DAO.add_detected_object_from_coral_object_list(self.tile_sample_id, self.cod_model.get_object_list(), exclude_outside_of_tile=True) # DB operation
-            stat.update(
-                {
+            if self.cod_model is not None:
+                # detection ran — save objects and real counts
+                num_objects = self.cod_model.get_num_objects()
+                num_invalid_objects = self.cod_model.get_num_invalidated_objects()
+                logger.info(f'{type(self).__name__}: Saving objects to database (valid/all): {num_objects - num_invalid_objects} {num_objects}')
+                DETECT_DAO.delete_detected_objects_of_tile_sample(self.tile_sample_id)
+                stat = DETECT_DAO.add_detected_object_from_coral_object_list(self.tile_sample_id, self.cod_model.get_object_list(), exclude_outside_of_tile=True)
+                stat.update({
                     'duplicates_removed': self.cod_model.get_num_invalidated_objects(),
                     'total_object_count': self.cod_model.get_num_objects(),
-                }
-            )
+                })
+            else:
+                # stitching-only mode — record zero counts
+                logger.info(f'{type(self).__name__}: No detection model was active; recording zero counts')
+                DETECT_DAO.delete_detected_objects_of_tile_sample(self.tile_sample_id)
+                stat = {'coral_alive_count': 0, 'coral_dead_count': 0, 'other_count': 0,
+                        'duplicates_removed': 0, 'total_object_count': 0}
             logger.info(f'{type(self).__name__}: Statistics {stat}')
             self.detection_stat.update(stat)
-            # save the statistics to the database
-            self._update_detection_stat(self.detection_stat)     # DB opration
+            self._update_detection_stat(self.detection_stat)
         except Exception:
             traceback.print_exc()
             raise DetectorAborted(DetectorExceptionCodes.DB_ERROR, 'Failed to write detection results to the database')
@@ -366,8 +404,7 @@ class DetectionTaskModel():
             self.generate_html_files()
         except Exception as e:
             raise DetectorAborted(DetectorExceptionCodes.OS_ERROR, f'Unable to write html files: {e}', e=e)
-        # update the progress model
-        self.progress_model.end_stage(ProgressStages.COLLECT_STAT) 
+        self.progress_model.end_stage(ProgressStages.COLLECT_STAT)
         self.progress_model.end_stage(ProgressStages.COMPLETED)
 
     def cancel_task(self):
@@ -392,30 +429,31 @@ class DetectionTaskModel():
             traceback.print_exc()
             raise
         
+        if self.cod_model is not None:
+            try:
+                # generate the html file for viewing the annotated whole reconstructed image
+                annotated_whole_reco_filename = self.cod_model.ANNOTATED_WHOLE_RECO_IMAGE_FILENAME
+                html_output_file = os.path.join(self.logdata_folder, DetectionTaskModel.ANNOTATED_WHOLE_RECO_HTML_FILENAME)
+                LightboxHelper.generate_single_image_lightbox(html_output_file, annotated_whole_reco_filename)
+                link_dict_list.append({'href': annotated_whole_reco_filename, 'text': 'Annotated whole tile sample'})
+            except Exception as e:
+                logger.warning(f'Failed to generate HTML file for showing the annotated whole tile sample')
+                traceback.print_exc()
+                raise
+
+            try:
+                # generate the html file for viewing the annotated whole reconstructed image of original scale
+                annotated_original_scale_filename = self.cod_model.ANNOTATED_WHOLE_RECO_ORIGINAL_SCALE_IMAGE_FILENAME
+                html_output_file = os.path.join(self.logdata_folder, DetectionTaskModel.ROTATED_ANNOTATED_ORIGINAL_SCALE_HTML_FILENAME)
+                LightboxHelper.generate_single_image_lightbox(html_output_file, annotated_original_scale_filename)
+                link_dict_list.append({'href': annotated_original_scale_filename, 'text': 'Annotated whole tile sample original scale'})
+            except Exception as e:
+                logger.warning(f'Failed to generate HTML file for showing the annotated whole tile sample at original scale')
+                traceback.print_exc()
+                raise
+
         try:
-            # generate the html file for viewing the annotated whole reconstructed image
-            annotated_whole_reco_filename = self.cod_model.ANNOTATED_WHOLE_RECO_IMAGE_FILENAME
-            html_output_file = os.path.join(self.logdata_folder, DetectionTaskModel.ANNOTATED_WHOLE_RECO_HTML_FILENAME)
-            LightboxHelper.generate_single_image_lightbox(html_output_file, annotated_whole_reco_filename)
-            link_dict_list.append({'href': annotated_whole_reco_filename, 'text': 'Annotated whole tile sample'})
-        except Exception as e:
-            logger.warning(f'Failed to generate HTML file for showing the annotated whole tile sample')
-            traceback.print_exc()
-            raise   
-             
-        try:
-            # generate the html file for viewing the annotated whole reconstructed image of original scale
-            annotated_original_scale_filename = self.cod_model.ANNOTATED_WHOLE_RECO_ORIGINAL_SCALE_IMAGE_FILENAME
-            html_output_file = os.path.join(self.logdata_folder, DetectionTaskModel.ROTATED_ANNOTATED_ORIGINAL_SCALE_HTML_FILENAME)
-            LightboxHelper.generate_single_image_lightbox(html_output_file, annotated_original_scale_filename)
-            link_dict_list.append({'href': annotated_original_scale_filename, 'text': 'Annotated whole tile sample original scale'})
-        except Exception as e:
-            logger.warning(f'Failed to generate HTML file for showing the annotated whole tile sample at original scale')
-            traceback.print_exc()
-            raise   
-        
-        try:
-            # generate the html file for viewing the feature matching images 
+            # generate the html file for viewing the feature matching images
             feature_matching_image_dict_list = self.reco_model.get_feature_match_image_dict_list()
             html_output_file = os.path.join(self.logdata_folder, DetectionTaskModel.FEATURE_MATCH_HTML_FILENAME)
             title = 'Feature Matching Output in the Reconstruction of Tile Image'
@@ -425,38 +463,35 @@ class DetectionTaskModel():
             logger.warning(f'Failed to generate HTML file for showing feature matching between images')
             traceback.print_exc()
             raise
-        try:
-            # generate the html file for viewing the annotated blobs
-            annotated_blob_dict_list_as_dict = self.cod_model.get_annotated_blob_filename_dict_lists_as_dict()
-            # iterate through the index of the dict and generate the annotated blobs for each image
-            for image_index in annotated_blob_dict_list_as_dict.keys():
-                col_index, row_index = image_index
-                html_output_file = os.path.join(self.logdata_folder, DetectionTaskModel.ANNOTATED_BLOBS_HTML_FILENAME.format(col_index, row_index))
-                title = f'Image Blobs Annotated with Detected Objects in Image {image_index}'
-                LightboxHelper.generate_multi_images_lightbox(html_output_file, annotated_blob_dict_list_as_dict[image_index], title)
-            # generate the annotated blob index page for all images
-            image_index_list = list(annotated_blob_dict_list_as_dict.keys())
-            image_index_list.sort()
-            annotated_blob_index_links_list = []
-            for image_index in image_index_list:
-                col_index, row_index = image_index
-                annotated_blob_index_links_list.append({'href': DetectionTaskModel.ANNOTATED_BLOBS_HTML_FILENAME.format(col_index, row_index), 'text': f'Image Blobs Annotated with Detected Objects in Image {image_index}'}) 
-            
-            html_output_file = os.path.join(self.logdata_folder, DetectionTaskModel.ANNOTATED_BLOBS_INDEX_HTML_FILENAME)
-            title = f'Image Blobs Annotated with Detected Objects in Tile Sample {self.tile_sample_id}'
-            LightboxHelper.generate_landing_page(html_output_file, annotated_blob_index_links_list, title)
-                
-            link_dict_list.append({'href': DetectionTaskModel.ANNOTATED_BLOBS_INDEX_HTML_FILENAME, 'text': 'Image Blobs Annotated with Detected Objects'})
-            # generate the html file for viewing the annotated images
-            annotated_image_dict_list = self.cod_model.get_annotated_image_filename_dict_list()
-            html_output_file = os.path.join(self.logdata_folder, DetectionTaskModel.ANNOTATED_IMAGES_HTML_FILENAME)
-            title = 'Capture Images Annotated with Detected Objects'
-            LightboxHelper.generate_multi_images_lightbox(html_output_file, annotated_image_dict_list, title)     
-            link_dict_list.append({'href': DetectionTaskModel.ANNOTATED_IMAGES_HTML_FILENAME, 'text': 'Capture Images Annotated with Detected Objects'})     
-        except:
-            logger.warning(f'Failed to generate HTML file for showing annotated images')    
-            traceback.print_exc()
-            raise
+
+        if self.cod_model is not None:
+            try:
+                # generate the html file for viewing the annotated blobs
+                annotated_blob_dict_list_as_dict = self.cod_model.get_annotated_blob_filename_dict_lists_as_dict()
+                for image_index in annotated_blob_dict_list_as_dict.keys():
+                    col_index, row_index = image_index
+                    html_output_file = os.path.join(self.logdata_folder, DetectionTaskModel.ANNOTATED_BLOBS_HTML_FILENAME.format(col_index, row_index))
+                    title = f'Image Blobs Annotated with Detected Objects in Image {image_index}'
+                    LightboxHelper.generate_multi_images_lightbox(html_output_file, annotated_blob_dict_list_as_dict[image_index], title)
+                image_index_list = sorted(annotated_blob_dict_list_as_dict.keys())
+                annotated_blob_index_links_list = []
+                for image_index in image_index_list:
+                    col_index, row_index = image_index
+                    annotated_blob_index_links_list.append({'href': DetectionTaskModel.ANNOTATED_BLOBS_HTML_FILENAME.format(col_index, row_index), 'text': f'Image Blobs Annotated with Detected Objects in Image {image_index}'})
+                html_output_file = os.path.join(self.logdata_folder, DetectionTaskModel.ANNOTATED_BLOBS_INDEX_HTML_FILENAME)
+                title = f'Image Blobs Annotated with Detected Objects in Tile Sample {self.tile_sample_id}'
+                LightboxHelper.generate_landing_page(html_output_file, annotated_blob_index_links_list, title)
+                link_dict_list.append({'href': DetectionTaskModel.ANNOTATED_BLOBS_INDEX_HTML_FILENAME, 'text': 'Image Blobs Annotated with Detected Objects'})
+                # generate the html file for viewing the annotated images
+                annotated_image_dict_list = self.cod_model.get_annotated_image_filename_dict_list()
+                html_output_file = os.path.join(self.logdata_folder, DetectionTaskModel.ANNOTATED_IMAGES_HTML_FILENAME)
+                title = 'Capture Images Annotated with Detected Objects'
+                LightboxHelper.generate_multi_images_lightbox(html_output_file, annotated_image_dict_list, title)
+                link_dict_list.append({'href': DetectionTaskModel.ANNOTATED_IMAGES_HTML_FILENAME, 'text': 'Capture Images Annotated with Detected Objects'})
+            except:
+                logger.warning(f'Failed to generate HTML file for showing annotated images')
+                traceback.print_exc()
+                raise
         # generate the landing page
         try:
             html_output_file = os.path.join(self.logdata_folder, DetectionTaskModel.LANDING_HTML_FILENAME)

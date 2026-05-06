@@ -336,6 +336,23 @@ class CoralObjectDetectModel():
             # raise DetectorExceptionCodes(DetectorExceptionCodes.OS_ERROR, f'Failed to save rotated annotated image to {output_image_file}')
         return True
     
+    @staticmethod
+    def draw_tab_grid_on_image(image: np.ndarray, image_scale: float, tile_origin_in_px: tuple, tile_size_in_px: tuple,
+                               n_cols: int, n_rows: int, output_image_file: str, line_width: int = 1, font_size: float = 0.6) -> bool:
+        grid_size_x = tile_size_in_px[0] / n_cols
+        grid_size_y = tile_size_in_px[1] / n_rows
+        for row in range(n_rows):
+            for col in range(n_cols):
+                start_x = tile_origin_in_px[0] + col * grid_size_x
+                start_y = tile_origin_in_px[1] + row * grid_size_y
+                end_x, end_y = start_x + grid_size_x - 1, start_y + grid_size_y - 1
+                sx, sy = int(start_x * image_scale), int(start_y * image_scale)
+                ex, ey = int(end_x * image_scale) + 1, int(end_y * image_scale) + 1
+                cv2.rectangle(image, (sx, sy), (ex, ey), (0, 0, 255), line_width)
+                cx, cy = (sx + ex) // 2, (sy + ey) // 2
+                cv2.putText(image, f'{col},{row}', (cx, cy), cv2.FONT_HERSHEY_PLAIN, font_size, (0, 0, 255), int(font_size + 0.5))
+        return cv2.imwrite(output_image_file, image)
+
     @classmethod
     def from_yaml_file(cls, object_file:str):
         """ Create a CoralObjectDetectModel object from a yaml file

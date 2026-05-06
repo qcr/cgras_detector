@@ -43,7 +43,7 @@ class YoloModelTable():
         
         self._model, self._model_column = self.get_default_datatable_model()
         self._datatable = dash_table.DataTable(data=self._model, columns=self._model_column,
-                                               id=prefix+'datatable', style_header={}, fill_width=True, 
+                                               id=prefix+'datatable', style_header={}, fill_width=True,
                                                cell_selectable=False, row_selectable='multi')
         
         model_name_label = dbc.Row([dbc.Label('Model Name:', width=2), dbc.Label(id=prefix+'name_label', width=10), ])
@@ -79,7 +79,12 @@ class YoloModelTable():
                     }, tooltip={"placement": "bottom", "always_visible": True}))
         ])
         
-        define_yolo_model_form = dbc.Form([model_name_label, model_file_label, classes_map_label, yolo_predict_params_label, keep_object_filter_label, species_input, range_input]) 
+        is_active_input = dbc.Row([
+            dbc.Label('Active', html_for=prefix+'is_active_input', width=2),
+            dbc.Col(dbc.Switch(id=prefix+'is_active_input', value=True, label='Model is used for coral object detection'), width=10),
+        ], className='mb-3')
+
+        define_yolo_model_form = dbc.Form([model_name_label, model_file_label, classes_map_label, yolo_predict_params_label, keep_object_filter_label, species_input, range_input, is_active_input])
                 
         self._editdata_modal = dbc.Modal(id=prefix+'edit_modal', children=[
                 dbc.ModalHeader(dbc.ModalTitle(children='Edit Model Attributes',)),
@@ -126,7 +131,8 @@ class YoloModelTable():
                            Output(prefix+'class_map_3', 'children'),
                            Output(prefix+'class_map_4', 'children'),
                            Output(prefix+'species_input', 'value'),
-                           Output(prefix+'range_input', 'value'),],
+                           Output(prefix+'range_input', 'value'),
+                           Output(prefix+'is_active_input', 'value'),],
             [Input(prefix+'row_edit_store', 'data')], prevent_initial_call=True)(self._edit_row_received())    
 
         self.app.callback([Output(prefix+'toast', 'is_open', allow_duplicate=True),
@@ -136,6 +142,7 @@ class YoloModelTable():
                            Output(self.updated_success_trigger_id, 'data', allow_duplicate=True),],
                         [State(prefix+'species_input', 'value'),
                         State(prefix+'range_input', 'value'),
+                        State(prefix+'is_active_input', 'value'),
                         State(prefix+'row_edit_store', 'data'),
                         Input({'type': prefix+'edit_action', 'index': ALL}, 'n_clicks')], prevent_initial_call=True)(self._edit_row_confirmed()) 
         
@@ -170,7 +177,8 @@ class YoloModelTable():
         self.app.callback([Output(prefix+'datatable', 'style_data_conditional'),
                           Output(prefix+'datatable', 'selected_rows', allow_duplicate=True)],
                             [Input(prefix+'datatable', 'selected_rows'),
-                             State(prefix+'datatable', 'data')], prevent_initial_call=True)(self._style_selected_rows())  
+                             State(prefix+'datatable', 'data')], prevent_initial_call=True)(self._style_selected_rows())
+
 
     def register_update_table_trigger(self, trigger_id:str):
         self.app.callback([Output(self.prefix+'update_datatable_trigger', 'data'),],
@@ -186,17 +194,10 @@ class YoloModelTable():
         model = DETECT_DAO.list_yolo_model()
         model['Period'] = model.apply(lambda row: DETECT_DAO.get_period_str(row['start_day'], row['end_day']), axis=1, result_type='reduce')
         model['Input Image Size'] = model.apply(lambda row: f'{row["input_image_width"]} x {row["input_image_height"]}', axis=1, result_type='reduce')
-        model = model[['id', 'name', 'species', 'Period', 'Input Image Size']]
-        model.columns = ['ID', 'Model Name', 'Species', 'Period', 'Input Image Size']
-        columns = []
-        for i in range(len(model.columns)):
-            editable = False
-            type = 'text'
-            columns.append({
-                'name': model.columns[i],
-                'id': model.columns[i],
-                'type': type,
-                'editable': editable})
+        model['Active'] = model['is_active'].apply(lambda v: 'Yes' if v else 'No')
+        model = model[['id', 'name', 'species', 'Period', 'Input Image Size', 'Active']]
+        model.columns = ['ID', 'Model Name', 'Species', 'Period', 'Input Image Size', 'Active']
+        columns = [{'name': col, 'id': col, 'type': 'text', 'editable': False} for col in model.columns]
         return model.to_dict('records'), columns
         
     # the callback for updating the datatable
@@ -229,42 +230,41 @@ class YoloModelTable():
             return (False, None, None, None, None, [])
         return table_button_pressed 
     
-    def _edit_row_received(self): 
+    def _edit_row_received(self):
         def edit_row_received(row):
             if row is None:
                 raise PreventUpdate
             start_day, end_day = row['start_day'], row['end_day']
             if end_day is None or end_day < 0:
                 end_day = self.default_max_end_day
+            is_active = bool(row.get('is_active', 1))
             try:
                 class_map_str_1 = f'POLYP_SINGLE: {row["classes_map"][ClassHierarchyCoral.POLYP_SINGLE.value]}'
                 class_map_str_2 = f'POLYP_MULTI: {row["classes_map"][ClassHierarchyCoral.POLYP_MULTI.value]}'
                 class_map_str_3 = f'POLYP_KEYPART: {row["classes_map"][ClassHierarchyCoral.POLYP_KEYPART.value]}'
                 class_map_str_4 = f'DEAD_CORAL: {row["classes_map"][ClassHierarchyCoral.DEAD_CORAL.value]}'
-                # convert predict_params_dict to a string
                 predict_params = row.get('predict_params', '')
-                keep_object_filter = row.get('predict_params', '')
-                return (True, row['name'], row['model_file_path'], str(predict_params), str(keep_object_filter), class_map_str_1, class_map_str_2, class_map_str_3, class_map_str_4, row['species'], (start_day, end_day,),)
+                keep_object_filter = row.get('keep_object_filter', '')
+                return (True, row['name'], row['model_file_path'], str(predict_params), str(keep_object_filter), class_map_str_1, class_map_str_2, class_map_str_3, class_map_str_4, row['species'], (start_day, end_day,), is_active,)
             except:
-                return (True, row['name'], row['model_file_path'], None, None, None, None, None, None, row['species'], (start_day, end_day,),)
+                return (True, row['name'], row['model_file_path'], None, None, None, None, None, None, row['species'], (start_day, end_day,), is_active,)
         return edit_row_received     
 
-    def _edit_row_confirmed(self): 
-        def edit_row_confirmed(species, range, row, *args):
+    def _edit_row_confirmed(self):
+        def edit_row_confirmed(species, range, is_active, row, *args):
             button_id = ctx.triggered_id if ctx.triggered_id is not None else {}
             button_index = button_id.get('index', None)
             if button_index.endswith('confirm'):
                 start_day, end_day = range
                 end_day = -1 if end_day >= self.default_max_end_day else end_day
                 result = DETECT_DAO.update_yolo_model(row['name'], species, start_day, end_day)
+                DETECT_DAO.set_yolo_model_active(row['name'], 1 if is_active else 0)
                 if result:
-                    message = 'Update yolo model successful'
-                    return (True, message, False, True, True) 
+                    return (True, 'Update yolo model successful', False, True, True)
                 else:
-                    message = 'Update yolo model failed'
-                    return (True, message, False, True, False) 
+                    return (True, 'Update yolo model failed', False, True, False)
             else:
-                return (False, ' ', False, True, False) 
+                return (False, ' ', False, True, False)
         return edit_row_confirmed  
 
     def _delete_row_confirmed(self): 
@@ -292,3 +292,4 @@ class YoloModelTable():
             ]
             return (style_data_conditional, selected_rows,)
         return style_selected_rows
+

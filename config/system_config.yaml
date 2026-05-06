@@ -55,6 +55,7 @@ cgras_detector:
   loctile_model_filename: loctile_model.yaml    # for developers' use and not to be adjusted
   cod_model_filename: coral_object_detect_model.yaml  # for developers' use and not to be adjusted
   reco_working_scale: 0.08                     # the scale at which the reconstruction process operate on the images, default 0.10
+  reco_tab_grid_image: True                    # output tab grid annotated images after tile location (working scale always; original scale requires reco_debug_images_at_original_scale)
   reco_debug_images_at_original_scale: True
   reco_debug_feature_matching_images: True
   reco_feature_detectors: ['brisk', 'sift']     # sift, orb, brisk, akaze 

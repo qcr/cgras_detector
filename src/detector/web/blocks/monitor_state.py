@@ -93,7 +93,7 @@ class MonitorStateBlock():
                 if self.current_detect_message is None:
                     self.current_detect_message = [
                         'Busy counting corals.',
-                        'It used to take 1-2 hours to count a single coral tile.',
+                        'It used to take 1-2 hours to manually count a single coral tile.',
                         'Using AI to count tiny corals automatically.'
                     ][random.randrange(0, 3)]
                 self.banner_message = self.current_detect_message

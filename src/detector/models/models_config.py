@@ -24,6 +24,7 @@ class ModelsConfigNames(Enum):
     RECO_MODEL_FILENAME = 'reco_model_filename'
     LOCTILE_MODEL_FILENAME = 'loctile_model_filename'
     RECO_DEGUG_IMAGE_ORIGINAL_SCALE = 'reco_debug_images_at_original_scale'
+    RECO_TAB_GRID_IMAGE = 'reco_tab_grid_image'
     RECO_DEBUG_FEATURE_MATCH_IMAGES = 'reco_debug_feature_matching_images'
     RECO_FEATURE_DETECTORS = 'reco_feature_detectors'
     RECO_FEATURE_MATCHING_CONFIDENCE_THRESHOLD = 'reco_feature_matching_confidence_threshold'
