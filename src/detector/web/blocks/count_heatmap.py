@@ -38,10 +38,12 @@ class CountHeatmapBlock():
         self.coral_trend_model = self.output_model = None
         self.heatmap_figures_list = None
         self.class_options = None
+        self.current_filter_class = None
+        self.current_show_count_threshold = 0
         # define widgets
         heatmap_show_label_slider_max = CONFIG.get(SystemConfigNames.HEATMAP_SHOW_LABEL_SLIDER_MAX, 30)
         _sample_select_datatable = dash_table.DataTable(id=prefix+'sample_select_datatable', row_selectable=False, cell_selectable=True, style_cell={'fontSize': 14})
-        _count_threshold_slider = dcc.Slider(0, heatmap_show_label_slider_max, 1, value=5, id=prefix+'count_threshold_slider',
+        _count_threshold_slider = dcc.Slider(0, heatmap_show_label_slider_max, 1, value=0, id=prefix+'count_threshold_slider',
                                                marks = {i: f'{i}' for i in range(0, heatmap_show_label_slider_max, 5)}, tooltip={"always_visible": False,},className='mt-5')
         # define the main panel
         self._panel = html.Div(id=prefix+'top_panel', children=[
@@ -98,6 +100,21 @@ class CountHeatmapBlock():
     # return the heatmap figures as a list for export
     def get_figures_as_list(self):
         return self.heatmap_figures_list
+
+    # generate heatmaps for all tile samples belonging to tile_id (used by ZIP download)
+    def generate_all_figures_for_tile(self, tile_id):
+        coral_trend_model, _ = self._get_coral_trend_model(tile_id)
+        if len(coral_trend_model) == 0:
+            return []
+        if self.class_options is None:
+            self.class_options = CoralObjectMapModelHelper.get_class_options_list()
+        if not self.class_options:
+            return []
+        filter_class = self.current_filter_class or self.class_options[0]['value']
+        latest_index = len(coral_trend_model) - 1
+        _, figures_list = self._generate_figures_list(coral_trend_model, filter_class, compare_to_index=latest_index,
+                                                      show_count_threshold=self.current_show_count_threshold)
+        return figures_list
 
     # generate the coral count trend model
     def _get_coral_trend_model(self, tile_id):
@@ -163,6 +180,7 @@ class CountHeatmapBlock():
             # get options for the dropdown
             self.class_options = CoralObjectMapModelHelper.get_class_options_list()
             value = self.class_options[0]['value'] if self.class_options is not None and len(self.class_options) > 0 else None
+            self.current_filter_class = value
             return (self.class_options, value,)
         return update_class_dropdown
 
@@ -193,6 +211,9 @@ class CountHeatmapBlock():
             if len(self.coral_trend_model) > 0:
                 if active_cell is not None:
                     compare_to_index = active_cell['row']
+                # persist current UI state for use by export
+                self.current_filter_class = filter_class
+                self.current_show_count_threshold = slider_value if slider_value is not None else 0
                 # set the slider value as the show count threshold
                 show_count_threshold = slider_value
                 # generate history of heatmaps

@@ -11,7 +11,7 @@ dash-bootstrap-components
 flask-restx>=1.3.0
 # graphing
 plotly
-kaleido                    # generate image in plotly
+kaleido==0.2.1             # generate image in plotly (v1+ requires Chrome; 0.2.1 has bundled renderer)
 seaborn
 # json2html==1.3.0          # generate html from json, not used
 # python-dateutil==2.8.2    # not used

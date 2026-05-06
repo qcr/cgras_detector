@@ -107,7 +107,14 @@ def run_update_table_definitions_010():
     db_tools.update(DETECT_DBFILE, sql)     
     sql = 'ALTER TABLE yolo_model ADD COLUMN classes_map_yaml text DEFAULT NULL'
     db_tools.update(DETECT_DBFILE, sql)     
-    
+
+# function to add the predict_params_yaml and keep_object_filter_yaml columns added after release 0.1.0
+def run_update_table_definitions_add_yolo_columns():
+    sql = 'ALTER TABLE yolo_model ADD COLUMN predict_params_yaml text DEFAULT NULL'
+    db_tools.update(DETECT_DBFILE, sql)
+    sql = 'ALTER TABLE yolo_model ADD COLUMN keep_object_filter_yaml text DEFAULT NULL'
+    db_tools.update(DETECT_DBFILE, sql)
+
 # ------------------------------------------------
 # The main program for running a command line 
 # program for executing sql statements

@@ -33,7 +33,8 @@ class CountResultDownloadBlock():
         # model variables
         self.get_trend_figure_func = None
         self.get_heatmap_figures_list_func = None
-        get_scatterplot_figures_list_func = None
+        self.get_scatterplot_figures_list_func = None
+        self.get_all_heatmap_figures_for_tile_func = None
         # define widgets
         self._count_show_button = dbc.Button('Coral Count Report', id=prefix+'popup_button', color='light', 
                                              href='', external_link=True, target='count_view')
@@ -61,10 +62,11 @@ class CountResultDownloadBlock():
                             Output(self.prefix+'main_panel', 'style'),],
             [Input(trigger_id, 'data')], prevent_initial_call=True, allow_duplicate=True)(self._update_tile_id()) 
         
-    def set_download_figures_funcs(self, get_trend_figure_func, get_heatmap_figures_list_func, get_scatterplot_figures_list_func):
+    def set_download_figures_funcs(self, get_trend_figure_func, get_heatmap_figures_list_func, get_scatterplot_figures_list_func, get_all_heatmap_figures_for_tile_func=None):
         self.get_trend_figure_func = get_trend_figure_func
         self.get_heatmap_figures_list_func = get_heatmap_figures_list_func
         self.get_scatterplot_figures_list_func = get_scatterplot_figures_list_func
+        self.get_all_heatmap_figures_for_tile_func = get_all_heatmap_figures_for_tile_func
         # define callback
         self.app.callback([Output(self.prefix+'download_figures_zip_file', 'data', allow_duplicate=True)],
             [Input(self.prefix+'download_figures', 'n_clicks'),
@@ -95,38 +97,50 @@ class CountResultDownloadBlock():
         def update_datatable(n_clicks, tile_id):
             if not n_clicks or not tile_id:
                 raise PreventUpdate
-            image_filebytes_list = []
-            image_filename_list = []
-            # retrieve figures from the trend panel
-            if self.get_trend_figure_func is not None:
-                fig_list = self.get_trend_figure_func()
+            try:
+                image_filebytes_list = []
+                image_filename_list = []
+                # retrieve figures from the trend panel
+                if self.get_trend_figure_func is not None:
+                    fig_list = self.get_trend_figure_func()
+                    if fig_list:
+                        trend_fig = fig_list[0]
+                        if trend_fig is not None:
+                            img_bytes = trend_fig.to_image(format='png')
+                            image_filebytes_list.append(img_bytes)
+                            image_filename_list.append(f'{tile_id}_trend_chart.png')
+                # retrieve figures from the heatmap panel — generate all samples fresh if possible
+                if self.get_all_heatmap_figures_for_tile_func is not None:
+                    fig_list = self.get_all_heatmap_figures_for_tile_func(tile_id)
+                elif self.get_heatmap_figures_list_func is not None:
+                    fig_list = self.get_heatmap_figures_list_func()
+                else:
+                    fig_list = None
                 if fig_list:
-                    trend_fig = fig_list[0]
-                    img_bytes = trend_fig.to_image(format='png')
-                    image_filebytes_list.append(img_bytes)
-                    image_filename_list.append(f'{tile_id}_trend_chart.png')
-            # retrieve figures from the heatmap panel
-            if self.get_heatmap_figures_list_func is not None:            
-                fig_list = self.get_heatmap_figures_list_func()
-                for index, heatmap_fig in enumerate(fig_list):
-                    img_bytes = heatmap_fig.to_image(format='png')
-                    title = heatmap_fig.to_dict()['layout']['title']['text']
-                    image_filebytes_list.append(img_bytes)
-                    image_filename_list.append(f'{tile_id}_heatmap_{index}.png')
-            # retrieve figures from the scatter plot panel
-            if self.get_scatterplot_figures_list_func:
-                fig_list = self.get_scatterplot_figures_list_func()
-                for index, scatterplot_fig in enumerate(fig_list):
-                    img_bytes = scatterplot_fig.to_image(format='png')
-                    title = scatterplot_fig.to_dict()['layout']['title']['text']
-                    image_filebytes_list.append(img_bytes)
-                    image_filename_list.append(f'{tile_id}_scatterplot_{index}.png')                      
-                    
-            zip_encoded = self.generate_zip(image_filebytes_list, image_filename_list)
-            zip_encoded = b64encode(zip_encoded).decode()
-            data = dict(content=zip_encoded, filename=f'{tile_id}_charts.zip', base64=True)            
-            return (data,)
-        return update_datatable 
+                    for index, heatmap_fig in enumerate(fig_list):
+                        if heatmap_fig is None:
+                            continue
+                        img_bytes = heatmap_fig.to_image(format='png')
+                        image_filebytes_list.append(img_bytes)
+                        image_filename_list.append(f'{tile_id}_heatmap_{index}.png')
+                # retrieve figures from the scatter plot panel
+                if self.get_scatterplot_figures_list_func:
+                    fig_list = self.get_scatterplot_figures_list_func()
+                    if fig_list:
+                        for index, scatterplot_fig in enumerate(fig_list):
+                            if scatterplot_fig is None:
+                                continue
+                            img_bytes = scatterplot_fig.to_image(format='png')
+                            image_filebytes_list.append(img_bytes)
+                            image_filename_list.append(f'{tile_id}_scatterplot_{index}.png')
+                zip_encoded = self.generate_zip(image_filebytes_list, image_filename_list)
+                zip_encoded = b64encode(zip_encoded).decode()
+                data = dict(content=zip_encoded, filename=f'{tile_id}_charts.zip', base64=True)
+                return (data,)
+            except Exception:
+                logger.exception('Error generating figures ZIP')
+                raise PreventUpdate
+        return update_datatable
     
     def generate_zip(self, image_filebytes_list, image_filename_list):
         sink = io.BytesIO()

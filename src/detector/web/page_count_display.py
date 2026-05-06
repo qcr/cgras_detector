@@ -69,8 +69,9 @@ class CountViewerPage():
         self.count_scatter_plot.register_trigger(self.update_trigger_id)
         self.download_menu_panel.register_trigger(self.update_trigger_id)
         # pass the relevant figure ids to the menu panel for download
-        self.download_menu_panel.set_download_figures_funcs(self.coral_count_trend.get_figures_as_list, self.count_heatmap.get_figures_as_list, 
-                                                            self.count_scatter_plot.get_figures_as_list)
+        self.download_menu_panel.set_download_figures_funcs(self.coral_count_trend.get_figures_as_list, self.count_heatmap.get_figures_as_list,
+                                                            self.count_scatter_plot.get_figures_as_list,
+                                                            self.count_heatmap.generate_all_figures_for_tile)
         
         self.app.callback([Output(self.update_trigger_id, 'data'),
                            Output(self.prefix+'_panel', 'style'),],
