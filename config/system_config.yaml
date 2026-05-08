@@ -58,7 +58,7 @@ cgras_detector:
   reco_tab_grid_image: True                    # output tab grid annotated images after tile location (working scale always; original scale requires reco_debug_images_at_original_scale)
   reco_debug_images_at_original_scale: True
   reco_debug_feature_matching_images: True
-  reco_feature_detectors: ['brisk', 'sift']     # sift, orb, brisk, akaze 
+  reco_feature_detectors: ['akaze', 'brisk', 'sift']     # sift, orb, brisk, akaze 
   reco_feature_matching_confidence_threshold: 0.8    # default 1.2
   reco_image_matching_min_confidence: 0.8   # between rows matching confidence, default 1.2
   reco_image2d_matching_min_confidence: 0.8 # row matching confidence, default 1.2
