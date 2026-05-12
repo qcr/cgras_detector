@@ -16,7 +16,7 @@ import dash_bootstrap_components as dbc
 # project modules
 from dash.exceptions import PreventUpdate
 from cgras_datatools.logging_tools import logger
-from detector.web.blocks import CountTileSelectTable, CoralCountTileInfoBlock, CountTileTrendBlock, CountHeatmapBlock, CountResultDownloadBlock, CountScatterMapBlock
+from detector.web.blocks import CountTileSelectTable, CoralCountTileInfoBlock, CountTileTrendBlock, CountHeatmapBlock, CountResultDownloadBlock, CountScatterMapBlock, CountImagePreviewBlock
 
 dash.register_page(__name__)
 
@@ -31,6 +31,7 @@ class CountViewerPage():
         self.coral_count_trend = CountTileTrendBlock(app, prefix)
         self.count_heatmap = CountHeatmapBlock(app, prefix)
         self.count_scatter_plot = CountScatterMapBlock(app, prefix)
+        self.count_image_preview = CountImagePreviewBlock(app, prefix, container_id=prefix+'_panel')
         self.download_menu_panel = CountResultDownloadBlock(app, prefix)
         self._define_page()
     
@@ -53,8 +54,10 @@ class CountViewerPage():
                         dbc.Row(className='mt-4'),                        
                         self.coral_count_trend.get_panel(),
                         dbc.Row(className='mt-4'),                        
-                        self.count_scatter_plot.get_panel(),                        
-                        dbc.Row([self.count_heatmap.get_panel()], className='mx-auto col-12, mt-4'), 
+                        self.count_scatter_plot.get_panel(),
+                        dbc.Row([self.count_heatmap.get_panel()], className='mx-auto col-12, mt-4'),
+                        dbc.Row(className='mt-4'),
+                        self.count_image_preview.get_panel(),
                 ], id=self.prefix+'_panel', className='col-9', style={'visibility': 'hidden'}), 
             ], className='mx-auto col-12'),
         ])
@@ -67,6 +70,7 @@ class CountViewerPage():
         self.coral_count_trend.register_trigger(self.update_trigger_id)
         self.count_heatmap.register_trigger(self.update_trigger_id)
         self.count_scatter_plot.register_trigger(self.update_trigger_id)
+        self.count_image_preview.register_trigger(self.update_trigger_id)
         self.download_menu_panel.register_trigger(self.update_trigger_id)
         # pass the relevant figure ids to the menu panel for download
         self.download_menu_panel.set_download_figures_funcs(self.coral_count_trend.get_figures_as_list, self.count_heatmap.get_figures_as_list,

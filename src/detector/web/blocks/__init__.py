@@ -16,6 +16,7 @@ from .count_tile_trend import CountTileTrendBlock
 from .count_data_download import CountResultDownloadBlock
 from .count_heatmap import CountHeatmapBlock
 from .count_scattermap import CountScatterMapBlock
+from .count_image_preview import CountImagePreviewBlock
 from .monitor_task_control import MonitorTaskControlBlock
 from .monitor_state import MonitorStateBlock
 from .monitor_execute_progress import MonitorExecuteProgressBlock
