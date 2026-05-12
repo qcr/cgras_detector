@@ -150,6 +150,8 @@ class DetectionTaskModel():
         # self.params[ModelsConfigNames.COD_BLOB_SIZE.value] = (self.yolo_model_dict['input_image_width'], self.yolo_model_dict['input_image_height'], )
         # self.params[ModelsConfigNames.OBJECT_CLASSES_MAP.value] = self.yolo_model_dict['classes_map']
         self.debug_images_at_original_scale = self.params.get(ModelsConfigNames.RECO_DEGUG_IMAGE_ORIGINAL_SCALE.value, False)
+        self.manual_validation_original_scale = self.params.get(ModelsConfigNames.RECO_MANUAL_VALIDATION_ORIGINAL_SCALE.value, False)
+        self.jpeg_quality = self.params.get(ModelsConfigNames.OUTPUT_JPEG_QUALITY.value, 95)
         self.params[ModelsConfigNames.TILE_SIZE_IN_MM.value] = self.tile_size
         self.params[ModelsConfigNames.FRAME_SIZE_IN_MM.value] = self.frame_size        
         # add other tile info to the params for metadata yaml file output
@@ -277,7 +279,7 @@ class DetectionTaskModel():
             image = cv2.imread(rotated_image_file)
             if image is not None:
                 output_file = os.path.join(self.logdata_folder, 'rotated_whole_reco_image_tab_grid.jpg')
-                CoralObjectDetectModel.draw_tab_grid_on_image(image, self.working_scale, tile_origin, tile_size, n_cols, n_rows, output_file)
+                CoralObjectDetectModel.draw_tab_grid_on_image(image, self.working_scale, tile_origin, tile_size, n_cols, n_rows, output_file, jpeg_quality=self.jpeg_quality)
         # full-scale tab grid image — scale line width and font proportionally to 1/working_scale
         full_scale_reco_file = os.path.join(self.logdata_folder, LocateTileModel.FILENAME_WHOLE_RECO_FULL_SCALE_IMAGE)
         if os.path.isfile(full_scale_reco_file):
@@ -289,7 +291,8 @@ class DetectionTaskModel():
                 scale_factor = max(1.0, 1.0 / self.working_scale)
                 CoralObjectDetectModel.draw_tab_grid_on_image(rotated, 1.0, tile_origin, tile_size, n_cols, n_rows, output_file,
                                                               line_width=max(1, round(scale_factor)),
-                                                              font_size=0.6 * scale_factor)
+                                                              font_size=0.6 * scale_factor,
+                                                              jpeg_quality=self.jpeg_quality)
 
     def execute_task_object_detection(self):
         self.progress_model.start_stage(ProgressStages.OBJECT_DETECT)
@@ -350,8 +353,8 @@ class DetectionTaskModel():
                     target_image_file = os.path.join(self.logdata_folder, image_file_name)
                     self.cod_model.annotate_whole_reco_image_with_objects(rotated_image, self.working_scale, self.loctile_model.get_tile_origin_in_image_space(), 
                                                                         self.loctile_model.get_tile_size_in_image_space(), target_image_file)
-        # annotate full scale if the flag debug_images_at_original_scale is True
-        if self.logdata_folder and self.debug_images_at_original_scale:
+        # annotate full scale if debug or manual validation original scale is enabled
+        if self.logdata_folder and (self.debug_images_at_original_scale or self.manual_validation_original_scale):
             rotated_reco_image_file = os.path.join(self.logdata_folder, LocateTileModel.ROTATED_WHOLE_RECO_FULL_SCALE_IMAGE_FILENAME)
             if os.path.isfile(rotated_reco_image_file):
                 rotated_image = cv2.imread(rotated_reco_image_file)
@@ -465,33 +468,43 @@ class DetectionTaskModel():
             raise
 
         if self.cod_model is not None:
-            try:
-                # generate the html file for viewing the annotated blobs
-                annotated_blob_dict_list_as_dict = self.cod_model.get_annotated_blob_filename_dict_lists_as_dict()
-                for image_index in annotated_blob_dict_list_as_dict.keys():
-                    col_index, row_index = image_index
-                    html_output_file = os.path.join(self.logdata_folder, DetectionTaskModel.ANNOTATED_BLOBS_HTML_FILENAME.format(col_index, row_index))
-                    title = f'Image Blobs Annotated with Detected Objects in Image {image_index}'
-                    LightboxHelper.generate_multi_images_lightbox(html_output_file, annotated_blob_dict_list_as_dict[image_index], title)
-                image_index_list = sorted(annotated_blob_dict_list_as_dict.keys())
-                annotated_blob_index_links_list = []
-                for image_index in image_index_list:
-                    col_index, row_index = image_index
-                    annotated_blob_index_links_list.append({'href': DetectionTaskModel.ANNOTATED_BLOBS_HTML_FILENAME.format(col_index, row_index), 'text': f'Image Blobs Annotated with Detected Objects in Image {image_index}'})
+            debug_blob_images = self.params.get(ModelsConfigNames.COD_DEBUG_BLOB_IMAGES.value, True)
+            if not debug_blob_images:
+                disabled_msg = 'Not generated: set <code>cod_debug_blob_images: True</code> in system_config.yaml to enable.'
                 html_output_file = os.path.join(self.logdata_folder, DetectionTaskModel.ANNOTATED_BLOBS_INDEX_HTML_FILENAME)
-                title = f'Image Blobs Annotated with Detected Objects in Tile Sample {self.tile_sample_id}'
-                LightboxHelper.generate_landing_page(html_output_file, annotated_blob_index_links_list, title)
+                LightboxHelper.generate_message_page(html_output_file, f'Image Blobs for Tile Sample {self.tile_sample_id}', disabled_msg)
                 link_dict_list.append({'href': DetectionTaskModel.ANNOTATED_BLOBS_INDEX_HTML_FILENAME, 'text': 'Image Blobs Annotated with Detected Objects'})
-                # generate the html file for viewing the annotated images
-                annotated_image_dict_list = self.cod_model.get_annotated_image_filename_dict_list()
                 html_output_file = os.path.join(self.logdata_folder, DetectionTaskModel.ANNOTATED_IMAGES_HTML_FILENAME)
-                title = 'Capture Images Annotated with Detected Objects'
-                LightboxHelper.generate_multi_images_lightbox(html_output_file, annotated_image_dict_list, title)
+                LightboxHelper.generate_message_page(html_output_file, 'Capture Images Annotated with Detected Objects', disabled_msg)
                 link_dict_list.append({'href': DetectionTaskModel.ANNOTATED_IMAGES_HTML_FILENAME, 'text': 'Capture Images Annotated with Detected Objects'})
-            except:
-                logger.warning(f'Failed to generate HTML file for showing annotated images')
-                traceback.print_exc()
-                raise
+            else:
+                try:
+                    # generate the html file for viewing the annotated blobs
+                    annotated_blob_dict_list_as_dict = self.cod_model.get_annotated_blob_filename_dict_lists_as_dict()
+                    for image_index in annotated_blob_dict_list_as_dict.keys():
+                        col_index, row_index = image_index
+                        html_output_file = os.path.join(self.logdata_folder, DetectionTaskModel.ANNOTATED_BLOBS_HTML_FILENAME.format(col_index, row_index))
+                        title = f'Image Blobs Annotated with Detected Objects in Image {image_index}'
+                        LightboxHelper.generate_multi_images_lightbox(html_output_file, annotated_blob_dict_list_as_dict[image_index], title)
+                    image_index_list = sorted(annotated_blob_dict_list_as_dict.keys())
+                    annotated_blob_index_links_list = []
+                    for image_index in image_index_list:
+                        col_index, row_index = image_index
+                        annotated_blob_index_links_list.append({'href': DetectionTaskModel.ANNOTATED_BLOBS_HTML_FILENAME.format(col_index, row_index), 'text': f'Image Blobs Annotated with Detected Objects in Image {image_index}'})
+                    html_output_file = os.path.join(self.logdata_folder, DetectionTaskModel.ANNOTATED_BLOBS_INDEX_HTML_FILENAME)
+                    title = f'Image Blobs Annotated with Detected Objects in Tile Sample {self.tile_sample_id}'
+                    LightboxHelper.generate_landing_page(html_output_file, annotated_blob_index_links_list, title)
+                    link_dict_list.append({'href': DetectionTaskModel.ANNOTATED_BLOBS_INDEX_HTML_FILENAME, 'text': 'Image Blobs Annotated with Detected Objects'})
+                    # generate the html file for viewing the annotated images
+                    annotated_image_dict_list = self.cod_model.get_annotated_image_filename_dict_list()
+                    html_output_file = os.path.join(self.logdata_folder, DetectionTaskModel.ANNOTATED_IMAGES_HTML_FILENAME)
+                    title = 'Capture Images Annotated with Detected Objects'
+                    LightboxHelper.generate_multi_images_lightbox(html_output_file, annotated_image_dict_list, title)
+                    link_dict_list.append({'href': DetectionTaskModel.ANNOTATED_IMAGES_HTML_FILENAME, 'text': 'Capture Images Annotated with Detected Objects'})
+                except:
+                    logger.warning(f'Failed to generate HTML file for showing annotated images')
+                    traceback.print_exc()
+                    raise
         # generate the landing page
         try:
             html_output_file = os.path.join(self.logdata_folder, DetectionTaskModel.LANDING_HTML_FILENAME)

@@ -54,9 +54,11 @@ cgras_detector:
   reco_model_filename: reco_model.yaml          # for developers' use and not to be adjusted
   loctile_model_filename: loctile_model.yaml    # for developers' use and not to be adjusted
   cod_model_filename: coral_object_detect_model.yaml  # for developers' use and not to be adjusted
+  output_jpeg_quality: 70                      # JPEG quality for all output images (1-100); lower values reduce disk usage
   reco_working_scale: 0.08                     # the scale at which the reconstruction process operate on the images, default 0.10
-  reco_tab_grid_image: True                    # output tab grid annotated images after tile location (working scale always; original scale requires reco_debug_images_at_original_scale)
-  reco_debug_images_at_original_scale: True
+  reco_tab_grid_image: True                    # output tab grid annotated images after tile location (working scale always)
+  reco_manual_validation_original_scale: True  # output annotated and tab-grid images at original scale for manual validation
+  reco_debug_images_at_original_scale: False   # output all intermediate reconstruction images at original scale (large disk usage)
   reco_debug_feature_matching_images: True
   reco_feature_detectors: ['akaze', 'brisk', 'sift']     # sift, orb, brisk, akaze 
   reco_feature_matching_confidence_threshold: 0.8    # default 1.2
@@ -79,7 +81,7 @@ cgras_detector:
   loctile_template_corner_size: 20                 # pixels, default 12
   # detection task parameters: object detection  
 
-  cod_debug_blob_images: True
+  cod_debug_blob_images: False
   cod_blob_overlap_pix: 128
   cod_use_cached_object_detection: True
   cod_coral_child_min_overlap_ratio: 0.25         # the pverlap ratio of a polyp_single or polyp_keypart that is considered a child of a polyp_multi

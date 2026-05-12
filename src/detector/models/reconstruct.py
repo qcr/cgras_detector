@@ -509,7 +509,9 @@ class ImageReconstruct2DModel():
         self.logger = kwargs.get('logger', get_logger())
         self.logdata_folder = kwargs.get(ModelsConfigNames.LOGDATA_FOLDER.value, None)
         self.debug_images_at_original_scale = kwargs.get(ModelsConfigNames.RECO_DEGUG_IMAGE_ORIGINAL_SCALE.value, False)
+        self.manual_validation_original_scale = kwargs.get(ModelsConfigNames.RECO_MANUAL_VALIDATION_ORIGINAL_SCALE.value, False)
         self.debug_feature_matching_images = kwargs.get(ModelsConfigNames.RECO_DEBUG_FEATURE_MATCH_IMAGES.value, False)
+        self.jpeg_quality = kwargs.get(ModelsConfigNames.OUTPUT_JPEG_QUALITY.value, 95)
         self.working_scale = kwargs.get(ModelsConfigNames.RECO_WORKING_SCALE.value, 0.1)
         # model variables     
         self.scaling_factor = 1 / self.working_scale #  the working scale and its inverse
@@ -572,7 +574,7 @@ class ImageReconstruct2DModel():
                     image_dict = {'title': f'Feature matching between column {image_index_1} and {image_index_2} on row {row_index}', 'src': image_file_name}
                     self.feature_match_image_dict_list.append(image_dict)
                     image_file = os.path.join(self.logdata_folder, image_file_name)
-                    if not cv2.imwrite(image_file, image):
+                    if not cv2.imwrite(image_file, image, [cv2.IMWRITE_JPEG_QUALITY, self.jpeg_quality]):
                         raise DetectorAborted(DetectorExceptionCodes.OS_ERROR, f'Failed to write feature matching output to {image_file}')
         # step 1A: for each row in that reconsturction was failed, use the nearest row
         if len(succeeded_rows) == 0:
@@ -599,12 +601,12 @@ class ImageReconstruct2DModel():
                 raise DetectorCancelled(DetectorExceptionCodes.CANCELLED_BY_SYSTEM, 'Received an cancel command from the system')
             images_in_row = self.image_map.get_row_images_at_working_scale(y = row_index)
             output_file = os.path.join(self.logdata_folder, f'row_reco_image_{row_index}.jpg') if self.logdata_folder is not None else None
-            row_recoimage, normalized_warped_roi_corners, warped_roi_sizes = self._generate_1d_recoimage_with_scaling(images_in_row, self.camera_transforms_row_list[row_index], 
-                                                                                                             images_list_scaling_factor=1.0, output_file=output_file)
+            row_recoimage, normalized_warped_roi_corners, warped_roi_sizes = self._generate_1d_recoimage_with_scaling(images_in_row, self.camera_transforms_row_list[row_index],
+                                                                                                             images_list_scaling_factor=1.0, output_file=output_file, jpeg_quality=self.jpeg_quality)
             row_recoimages_list.append(row_recoimage)
             if output_file is not None:  # save the images only if output_folder is provided
                 self.logger.info(f'{type(self).__name__}: Writing 1d row reconstructed image (size: {row_recoimage.shape[:2][::-1]}) to file {output_file}')
-                if not cv2.imwrite(output_file, row_recoimage):
+                if not cv2.imwrite(output_file, row_recoimage, [cv2.IMWRITE_JPEG_QUALITY, self.jpeg_quality]):
                     raise DetectorAborted(DetectorExceptionCodes.OS_ERROR, f'Failed to write row reconstructed image to {output_file}')
 
         # step 3: if there is only one row, skip the rest
@@ -616,7 +618,7 @@ class ImageReconstruct2DModel():
         else:
             # step 4: prepare between rows image stitching by rotating each row reco images counterclockwise 
             self.logger.info(f'{type(self).__name__} Step 4: Rotate counter-clockwise the {self.nrows} reconstructed row images')
-            row_recoimages_rotated_list = self._rotate_cw90_images_list(row_recoimages_list, self.logdata_folder)
+            row_recoimages_rotated_list = self._rotate_cw90_images_list(row_recoimages_list, self.logdata_folder, self.jpeg_quality)
             
             # step 4: build the between rows reconstruction model
             self.logger.info(f'{type(self).__name__} Step 5: Build the top-level 1d reconstruction model from the {self.nrows} rotated images')
@@ -631,7 +633,7 @@ class ImageReconstruct2DModel():
                     image_dict = {'title': f'Feature matching between rows {image_index_1} and {image_index_2}', 'src': image_file_name}
                     self.feature_match_image_dict_list.append(image_dict)
                     image_file = os.path.join(self.logdata_folder, image_file_name)
-                    if not cv2.imwrite(image_file, cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)):
+                    if not cv2.imwrite(image_file, cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE), [cv2.IMWRITE_JPEG_QUALITY, self.jpeg_quality]):
                         raise DetectorAborted(DetectorExceptionCodes.OS_ERROR, f'Failed to write feature matching results between row reconstructed images to {image_file}')
             # using the computed transforms to generate the reconstructed image for the input 2d grid of images
             self.confidence_matrix_between_rows = reco_whole_model.get_confidence_matrix() 
@@ -649,16 +651,18 @@ class ImageReconstruct2DModel():
         if self.logdata_folder is not None:  
             output_file = os.path.join(self.logdata_folder, ImageReconstructModel.FILENAME_WHOLE_RECO_IMAGE)
             self.logger.info(f'{type(self).__name__}: Writing whole reconstructed image (size: {whole_reco_image.shape[:2][::-1]}) to file {output_file}')
-            if not cv2.imwrite(output_file, whole_reco_image):
+            if not cv2.imwrite(output_file, whole_reco_image, [cv2.IMWRITE_JPEG_QUALITY, self.jpeg_quality]):
                 raise DetectorAborted(DetectorExceptionCodes.OS_ERROR, f'Failed to write whole reconstructed image to {output_file}')
         self.whole_reco_image_size = whole_reco_image.shape[:2][::-1]
         if self.to_cancel:  # stop processing if abort signal is recieved
             raise DetectorCancelled(DetectorExceptionCodes.CANCELLED_BY_SYSTEM, 'Received an cancel command from the system')
-        # step 5: generate the debug images in original scale
-        if self.logdata_folder and self.debug_images_at_original_scale:
+        # step 5: generate the original-scale reconstruction when needed for debug or manual validation
+        if self.logdata_folder and (self.debug_images_at_original_scale or self.manual_validation_original_scale):
             images_list_scaling_factor = 1 / self.working_scale
             self._generate_whole_recoimage_with_scaling(self.images_2d_list, self.camera_transforms_row_list, self.camera_transforms_between_rows,
-                                                                                          images_list_scaling_factor, logdata_folder=self.logdata_folder)
+                                                        images_list_scaling_factor, logdata_folder=self.logdata_folder,
+                                                        save_row_images=self.debug_images_at_original_scale,
+                                                        jpeg_quality=self.jpeg_quality)
     def cancel_build(self):
         """ abort the current reconstruction process """
         self.logger.warning(f'ImageReconstruct2DModel: received ABORT')
@@ -764,7 +768,7 @@ class ImageReconstruct2DModel():
         return loaded_images_list      
 
     @staticmethod
-    def _rotate_cw90_images_list(images_list:list, debug_folder=None) -> list:
+    def _rotate_cw90_images_list(images_list:list, debug_folder=None, jpeg_quality:int=95) -> list:
         """ Interal function to rotate the images in a list 90 degrees counter-clockwise
 
         :param images_list: a list of numpy images to be rotated
@@ -781,11 +785,11 @@ class ImageReconstruct2DModel():
             images_rotated_list.append(image_rotated)
             if debug_folder:
                 output_file = os.path.join(debug_folder, f'row_reco_image_{row_index}_rotated.jpg')
-                if not cv2.imwrite(output_file, image_rotated):
+                if not cv2.imwrite(output_file, image_rotated, [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality]):
                     raise DetectorAborted(DetectorExceptionCodes.OS_ERROR, f'Failed to write rotated reconstructed image to {output_file}')
         return images_rotated_list
 
-    def _generate_whole_recoimage_with_scaling(self, images_2d_list:list, camera_transforms_row_list:list, camera_transforms_between_rows:list, images_list_scaling_factor:float=1.0, logdata_folder:str=None) -> np.ndarray:
+    def _generate_whole_recoimage_with_scaling(self, images_2d_list:list, camera_transforms_row_list:list, camera_transforms_between_rows:list, images_list_scaling_factor:float=1.0, logdata_folder:str=None, save_row_images:bool=True, jpeg_quality:int=95) -> np.ndarray:
         """ Generates and returns the whole reconstructed images from the source images in the given image_2d_list and the camera transforms already computed
 
         :param images_2d_list: The source images to be reonconstructed as a whole image, arranged in a 2D list (list of list of images)
@@ -810,10 +814,10 @@ class ImageReconstruct2DModel():
             
             row_reco_image_original_scale, normalized_warped_roi_corners, warped_roi_sizes = ImageReconstruct1DModel.generate_reco_image(images_list, camera_tranforms_row, 
                                                                                                                                 images_list_scaling_factor)
-            if logdata_folder is not None:
+            if logdata_folder is not None and save_row_images:
                 output_file = os.path.join(logdata_folder, f'row_reco_image_{row_index}_original_scale.jpg')
                 self.logger.info(f'{type(self).__name__}: Writing full-scale row reconstructed image to file {output_file}')
-                if not cv2.imwrite(output_file, row_reco_image_original_scale):
+                if not cv2.imwrite(output_file, row_reco_image_original_scale, [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality]):
                    raise DetectorAborted(DetectorExceptionCodes.OS_ERROR, f'Failed to write whole reconstructed image at original scale to {output_file}')
                 
             row_reco_image_original_scale = cv2.rotate(row_reco_image_original_scale, cv2.ROTATE_90_COUNTERCLOCKWISE)
@@ -826,12 +830,12 @@ class ImageReconstruct2DModel():
         if logdata_folder is not None:
             output_file = os.path.join(logdata_folder, ImageReconstructModel.FILENAME_WHOLE_RECO_FULL_SCALE_IMAGE)
             self.logger.info(f'{type(self).__name__}: Writing whole full-scale reconstructed image to file {output_file}')
-            if not cv2.imwrite(output_file, whole_reco_image_original_scale):
+            if not cv2.imwrite(output_file, whole_reco_image_original_scale, [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality]):
                 raise DetectorAborted(DetectorExceptionCodes.OS_ERROR, f'Failed to write whole reconstructed image at original scale to {output_file}')
             
         return whole_reco_image_original_scale
         
-    def _generate_1d_recoimage_with_scaling(self, images_list:list, camera_tranforms_row:list, images_list_scaling_factor:float=1.0, output_file:str=None) :
+    def _generate_1d_recoimage_with_scaling(self, images_list:list, camera_tranforms_row:list, images_list_scaling_factor:float=1.0, output_file:str=None, jpeg_quality:int=95) :
         """ Generates and returns a row reconstructed image from a list of images of a row and the corresponding camera transforms 
 
         :param images_list: The source images to be merged into a row reconstructed image as a list
@@ -848,7 +852,7 @@ class ImageReconstruct2DModel():
         row_reco_image, normalized_warped_roi_corners, warped_roi_sizes = ImageReconstruct1DModel.generate_reco_image(images_list, camera_tranforms_row, images_list_scaling_factor)
         if output_file is not None:  # save the images only if output_folder is provided
             self.logger.info(f'{type(self).__name__}: Writing 1d reconstructed image (size: {row_reco_image.shape[:2][::-1]}) to file {output_file}')
-            if not cv2.imwrite(output_file, row_reco_image):
+            if not cv2.imwrite(output_file, row_reco_image, [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality]):
                 raise DetectorAborted(DetectorExceptionCodes.OS_ERROR, f'Failed to write row reconstructed image at scale to {output_file}')
         return row_reco_image, normalized_warped_roi_corners, warped_roi_sizes 
  

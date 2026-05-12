@@ -62,7 +62,8 @@ class CoralObjectDetectModel():
         # extract other keyword parameters - operational
         self.blob_overlap_pix = kwargs.get(ModelsConfigNames.COD_BLOB_OVERLAP_PIX.value, 0)
         self.coral_child_min_overlap_ratio = kwargs.get(ModelsConfigNames.COD_CORAL_CHILD_MIN_OVERLAP_RATIO.value, 0.25)
-        self.debug_blob_images = kwargs.get(ModelsConfigNames.COD_DEBUG_BLOB_IMAGES.value, True) 
+        self.debug_blob_images = kwargs.get(ModelsConfigNames.COD_DEBUG_BLOB_IMAGES.value, True)
+        self.jpeg_quality = kwargs.get(ModelsConfigNames.OUTPUT_JPEG_QUALITY.value, 95)
 
         # extract other keyword parameters - output cached data and debug information
         self.logdata_folder = kwargs.get(ModelsConfigNames.LOGDATA_FOLDER.value, None)
@@ -331,14 +332,15 @@ class CoralObjectDetectModel():
                     cv2.putText(rotated_reco_image, f'{coral_object.coral_class}', (text_pos[0], int(text_pos[1] + font_size * 15)),
                                 cv2.FONT_HERSHEY_PLAIN, max(font_size * 0.6, 0.6), (0, 0, 0), int(font_size + 0.5))                           
                             
-        if not cv2.imwrite(output_image_file, rotated_reco_image):
+        if not cv2.imwrite(output_image_file, rotated_reco_image, [cv2.IMWRITE_JPEG_QUALITY, self.jpeg_quality]):
             return False
             # raise DetectorExceptionCodes(DetectorExceptionCodes.OS_ERROR, f'Failed to save rotated annotated image to {output_image_file}')
         return True
     
     @staticmethod
     def draw_tab_grid_on_image(image: np.ndarray, image_scale: float, tile_origin_in_px: tuple, tile_size_in_px: tuple,
-                               n_cols: int, n_rows: int, output_image_file: str, line_width: int = 1, font_size: float = 0.6) -> bool:
+                               n_cols: int, n_rows: int, output_image_file: str, line_width: int = 1, font_size: float = 0.6,
+                               jpeg_quality: int = 95) -> bool:
         grid_size_x = tile_size_in_px[0] / n_cols
         grid_size_y = tile_size_in_px[1] / n_rows
         for row in range(n_rows):
@@ -351,7 +353,7 @@ class CoralObjectDetectModel():
                 cv2.rectangle(image, (sx, sy), (ex, ey), (0, 0, 255), line_width)
                 cx, cy = (sx + ex) // 2, (sy + ey) // 2
                 cv2.putText(image, f'{col},{row}', (cx, cy), cv2.FONT_HERSHEY_PLAIN, font_size, (0, 0, 255), int(font_size + 0.5))
-        return cv2.imwrite(output_image_file, image)
+        return cv2.imwrite(output_image_file, image, [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality])
 
     @classmethod
     def from_yaml_file(cls, object_file:str):
@@ -678,6 +680,7 @@ class CoralObjectDetectImageModel():
         # other keyword parameters - use cached detection object list instead of actual detection using the yolo_model
         self.use_cached_object_detection = kwargs.get(ModelsConfigNames.COD_USE_CACHED_OBJECT_DETECTION.value, False)
         self.debug_blob_images = kwargs.get(ModelsConfigNames.COD_DEBUG_BLOB_IMAGES.value, True)
+        self.jpeg_quality = kwargs.get(ModelsConfigNames.OUTPUT_JPEG_QUALITY.value, 95)
         # multiple yolo models
         self.merge_mutli_yolo_models = kwargs.get(ModelsConfigNames.COD_MERGE_MULTI_MODELS.value, False)
         # extract init model variables
@@ -788,7 +791,7 @@ class CoralObjectDetectImageModel():
                         image_dict = {'title': f'Annotated blob at image ({self.image_col_index} {self.image_row_index}) blob ({blob_col_index} {blob_row_index})', 'src': image_file_name}
                         self.annotated_blob_filename_dict_list.append(image_dict)
                         target_image_file = os.path.join(self.logdata_folder, image_file_name)
-                        if not cv2.imwrite(target_image_file, annotated_image):
+                        if not cv2.imwrite(target_image_file, annotated_image, [cv2.IMWRITE_JPEG_QUALITY, self.jpeg_quality]):
                             raise DetectorExceptionCodes(DetectorExceptionCodes.OS_ERROR, f'Failed to save annotated image to {target_image_file}')
                 else:
                     # if the object_list for the cache_index exists, just get it from the data structure
@@ -823,7 +826,7 @@ class CoralObjectDetectImageModel():
             image_dict = {'title': f'Annotated image ({self.image_col_index} {self.image_row_index})', 'src': image_file_name}
             self.annotated_image_filename_dict = image_dict
             target_image_file = os.path.join(self.logdata_folder, image_file_name)
-            if not cv2.imwrite(target_image_file, annotated_image):
+            if not cv2.imwrite(target_image_file, annotated_image, [cv2.IMWRITE_JPEG_QUALITY, self.jpeg_quality]):
                 raise DetectorExceptionCodes(DetectorExceptionCodes.OS_ERROR, f'Failed to save annotated image to {target_image_file}')
             
         # step 6: clear data if not needed for model inference

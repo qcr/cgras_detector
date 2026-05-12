@@ -78,6 +78,8 @@ class LocateTileModel():
         self.logdata_folder = kwargs.get('logdata_folder', None)
         self.write_debug_images = kwargs.get(ModelsConfigNames.LOCTILE_DEBUG_IMAGES.value, False)
         self.write_debug_images_original_scale = kwargs.get(ModelsConfigNames.RECO_DEGUG_IMAGE_ORIGINAL_SCALE.value, False)
+        self.write_manual_validation_original_scale = kwargs.get(ModelsConfigNames.RECO_MANUAL_VALIDATION_ORIGINAL_SCALE.value, False)
+        self.jpeg_quality = kwargs.get(ModelsConfigNames.OUTPUT_JPEG_QUALITY.value, 95)
         # self.blue_ratio_min = kwargs.get(ModelsConfigNames.LOCTILE_BLUE_RATIO_MIN.value, 0.35)
         # self.red_ratio_max = kwargs.get(ModelsConfigNames.LOCTILE_RED_RATIO_MAX.value, 0.15)
         self.working_scale = kwargs.get(ModelsConfigNames.LOCTILE_WORKING_SCALE.value, 0.1)
@@ -235,7 +237,7 @@ class LocateTileModel():
                 corner = (int(search_bbox[0] + max_loc[0] + self.template_corner_size / 2), int(search_bbox[1] + max_loc[1] + self.template_corner_size / 2))
 
         # write annotated image related to corner detection
-        if self.write_debug_images is not None and self.logdata_folder is not None:
+        if self.write_debug_images and self.logdata_folder is not None:
             try:
                 # write corner detect
                 debug_image_filepath = os.path.join(self.logdata_folder, f'locate_corner_{which_corner.name}.jpg')
@@ -243,11 +245,11 @@ class LocateTileModel():
                 point_1 = (int(corner[0] - self.template_corner_size / self.working_scale), int(corner[1] - self.template_corner_size / self.working_scale))
                 point_2 = (int(corner[0] + self.template_corner_size / self.working_scale), int(corner[1] + self.template_corner_size / self.working_scale))
                 image_bgr = cv2.rectangle(image_bgr, point_1, point_2, (0, 0, 255,), 10)
-                cv2.imwrite(debug_image_filepath, image_bgr)
+                cv2.imwrite(debug_image_filepath, image_bgr, [cv2.IMWRITE_JPEG_QUALITY, self.jpeg_quality])
                 # write template
                 debug_image_filepath = os.path.join(self.logdata_folder, f'template_{which_corner.name}.jpg')
                 template = cv2.cvtColor(template, cv2.COLOR_GRAY2BGR)
-                cv2.imwrite(debug_image_filepath, template)
+                cv2.imwrite(debug_image_filepath, template, [cv2.IMWRITE_JPEG_QUALITY, self.jpeg_quality])
             except:
                 raise DetectorAborted(DetectorExceptionCodes.OS_ERROR, f'Failed to write feature matching output to {debug_image_filepath}')
         return corner
@@ -302,7 +304,7 @@ class LocateTileModel():
         return point_in_image_space
         
     def _write_annotate_whole_image(self):
-        if self.write_debug_images is not None and self.logdata_folder is not None:
+        if self.write_debug_images and self.logdata_folder is not None:
             reco_working_scale = self.params.get(ModelsConfigNames.RECO_WORKING_SCALE.value, None)
             # if the reco_working_scale is not known, the scale of the whole_reco_image.jpg is also no known and annotation cannot be done
             if reco_working_scale is None:
@@ -319,15 +321,15 @@ class LocateTileModel():
                             self.corners_in_reco_space[WhichCorner.BOTTOM_LEFT],], np.float32)
             pts = np.multiply(pts, reco_working_scale).astype(np.int32)
             annotated_reco_whole_image = cv2.polylines(reco_whole_image, [pts], True, [0, 0, 255], 2)
-            if self.write_debug_images is not None and self.logdata_folder is not None:
+            if self.write_debug_images and self.logdata_folder is not None:
                 try:
                     annotated_reco_whole_image_filepath = os.path.join(self.logdata_folder, LocateTileModel.LOCTILE_WHOLE_RECO_IMAGE_FILENAME)
-                    cv2.imwrite(annotated_reco_whole_image_filepath, annotated_reco_whole_image)
+                    cv2.imwrite(annotated_reco_whole_image_filepath, annotated_reco_whole_image, [cv2.IMWRITE_JPEG_QUALITY, self.jpeg_quality])
                 except:
                     raise DetectorAborted(DetectorExceptionCodes.OS_ERROR, f'Failed to write whole reco image with tile bounds output to {annotated_reco_whole_image_filepath}')            
 
     def _write_rotated_whole_image(self):
-        if self.write_debug_images is not None and self.logdata_folder is not None:
+        if self.write_debug_images and self.logdata_folder is not None:
             reco_working_scale = self.params.get(ModelsConfigNames.RECO_WORKING_SCALE.value, None)
             # attempt to load the whole_reco_image
             reco_whole_image_filepath = os.path.join(self.logdata_folder, LocateTileModel.FILENAME_WHOLE_RECO_IMAGE)
@@ -352,25 +354,24 @@ class LocateTileModel():
                           (32, 255, 32,), 1)
             try:
                 rotated_reco_whole_image_filepath = os.path.join(self.logdata_folder, LocateTileModel.ROTATED_WHOLE_RECO_IMAGE_FILENAME)
-                cv2.imwrite(rotated_reco_whole_image_filepath, annotated_rotated_whole_image)
+                cv2.imwrite(rotated_reco_whole_image_filepath, annotated_rotated_whole_image, [cv2.IMWRITE_JPEG_QUALITY, self.jpeg_quality])
             except:
-                raise DetectorAborted(DetectorExceptionCodes.OS_ERROR, f'Failed to write rotated whole reco image with tile bounds output to {rotated_reco_whole_image_filepath}')                     
+                raise DetectorAborted(DetectorExceptionCodes.OS_ERROR, f'Failed to write rotated whole reco image with tile bounds output to {rotated_reco_whole_image_filepath}')
             return rotated_reco_whole_image_filepath
         return None
     
     def _write_rotated_whole_image_original_scale(self):
-        if self.write_debug_images is not None and self.logdata_folder is not None and self.write_debug_images_original_scale:
+        if self.logdata_folder is not None and (self.write_debug_images_original_scale or self.write_manual_validation_original_scale):
             # attempt to load the whole_reco_image
             reco_whole_image_filepath = os.path.join(self.logdata_folder, LocateTileModel.FILENAME_WHOLE_RECO_FULL_SCALE_IMAGE)
             reco_whole_image = cv2.imread(reco_whole_image_filepath)
             if reco_whole_image is None:
-                return    
+                return
             # compute the affine tranform matrix based on the detected corners
             affine_transform_matrix, rotate_angle = self._compute_affine_transform_only_rotation(self.corners_in_reco_space, (reco_whole_image.shape[0] // 2, reco_whole_image.shape[1] // 2,))
-            
             rotated_whole_image = cv2.warpAffine(reco_whole_image, affine_transform_matrix, (int(reco_whole_image.shape[1] * 1.1), int(reco_whole_image.shape[0] * 1.1)))
             rotated_reco_whole_image_filepath = os.path.join(self.logdata_folder, LocateTileModel.ROTATED_WHOLE_RECO_FULL_SCALE_IMAGE_FILENAME)
-            cv2.imwrite(rotated_reco_whole_image_filepath, rotated_whole_image)
+            cv2.imwrite(rotated_reco_whole_image_filepath, rotated_whole_image, [cv2.IMWRITE_JPEG_QUALITY, self.jpeg_quality])
             return rotated_reco_whole_image_filepath
         return None    
 

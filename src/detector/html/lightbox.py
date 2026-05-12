@@ -95,6 +95,16 @@ class LightboxHelper():
         html_table = '{}{}<table><tbody><tr></tr><tr></tr></tbody></table>'.format(''.join(f'{key}' for key in data.keys()), ''.join(f'{value}' for value in data.values()))
         return html_table
     
+    @staticmethod
+    def generate_message_page(save_html_to: str, page_title: str, message: str):
+        parent_folder = os.path.dirname(__file__)
+        with open(os.path.join(parent_folder, 'landing_view_image.html'), 'r') as file:
+            html = file.read()
+        html = html.replace('[[PAGE TITLE]]', page_title)
+        html = html.replace('[[PAGE CONTENT]]', f'<p>{message}</p>')
+        with open(save_html_to, 'w') as file:
+            file.write(html)
+
     # generate the landing page html that shows a list of links
     @staticmethod
     def generate_landing_page(save_html_to:str, link_dict_list:list, page_title:str):
