@@ -25,6 +25,8 @@ class HeatmapHelper():
     """ HeatmapHelper provides functions to help create heatmaps from a list of CoralObjects
 
     """
+    DEFAULT_COUNT_RANGE = (0,)
+
     @staticmethod
     def compute_object_count_map(object_list:list, map_size:tuple, class_filter=None, include_invalidated=False, count_range:tuple=None) -> np.ndarray:
         """ compute a 2d object count map as a numpy array from the locatios of the CoralObject in the input object_list

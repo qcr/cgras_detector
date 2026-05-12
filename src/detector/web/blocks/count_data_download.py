@@ -22,6 +22,7 @@ from dash.exceptions import PreventUpdate
 from cgras_datatools.logging_tools import logger
 from detector.model import DETECT_DAO, SampleStatusNames
 from detector.models.visualize import CoralObjectMapModel, CoralObjectMapModelHelper
+from detector.models.heatmap_tools import HeatmapHelper
 
 class CountResultDownloadBlock():
     def __init__(self, app, prefix):
@@ -29,7 +30,7 @@ class CountResultDownloadBlock():
         self.prefix = prefix = prefix + 'tdm_'
         self.tile_id_store_id = prefix+'tile_id_store'
         # default charting parameters      
-        self.default_count_range = None
+        self.default_count_range = HeatmapHelper.DEFAULT_COUNT_RANGE
         # model variables
         self.get_trend_figure_func = None
         self.get_heatmap_figures_list_func = None

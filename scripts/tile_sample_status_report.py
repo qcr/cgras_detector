@@ -319,6 +319,8 @@ def main():
                         help='Number of most recent samples to inspect')
     parser.add_argument('--out', default=DEFAULT_OUT,
                         help='Output PNG path')
+    parser.add_argument('--json', default=None,
+                        help='Optional path to write reconstruction failures as JSON list')
     args = parser.parse_args()
 
     if not os.path.exists(args.db):
@@ -339,6 +341,16 @@ def main():
           f'Other:{len(failures["Other"])})')
 
     generate_report(buckets, failures, args.n, len(samples), args.out)
+
+    json_path = args.json or os.path.splitext(args.out)[0] + '_reco_failures.json'
+    reco_list = [
+        {'tile_sample_id': tile_id, 'remarks': remarks}
+        for tile_id, remarks in failures['Reconstruction']
+    ]
+    import json
+    with open(json_path, 'w') as f:
+        json.dump(reco_list, f, indent=2)
+    print(f'Reconstruction failures JSON saved → {json_path}  ({len(reco_list)} entries)')
 
 
 if __name__ == '__main__':

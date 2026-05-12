@@ -50,7 +50,7 @@ APP.config['suppress_callback_exceptions'] = True
 RESTX_API.init_app(SERVER)
 
 # -- load the pages for the dash application which should appear after the above APP creation
-from . import page_count_display, page_dashboard, page_db_browse, page_models, page_sample_manager, page_coral_health, page_system_setup, popup_count_display
+from . import page_count_display, page_dashboard, page_db_browse, page_models, page_sample_manager, page_coral_health, page_system_setup, popup_count_display, page_bulk_exporter
 
 # -- Create a dash application object
 class DashApplicationMain():
@@ -69,10 +69,11 @@ class DashApplicationMain():
         self._db_browse_page = page_db_browse.DBTableBrowsePage(self.app)   
         self._sample_manager_page = page_sample_manager.SampleManagerPage(self.app)     
         self._yolo_model_file_page = page_models.ModelsPage(self.app)     
-        self._count_viewer_page = page_count_display.CountViewerPage(self.app)   
+        self._count_viewer_page = page_count_display.CountViewerPage(self.app)
         self._page_coral_health = page_coral_health.CoralHealthPage(self.app)
+        self._bulk_exporter_page = page_bulk_exporter.BulkExporterPage(self.app)
         # define the popup
-        self._count_viewer_popup = popup_count_display.CountViewerPopup(self.app) 
+        self._count_viewer_popup = popup_count_display.CountViewerPopup(self.app)
         # initialize the application
         self._define_app()
 
@@ -91,11 +92,12 @@ class DashApplicationMain():
         self._navbar_with_menu = dbc.NavbarSimple(
                     children=[
                         dbc.NavItem(dbc.NavLink('Monitor', href='/page_monitor')),
-                        dbc.NavItem(dbc.NavLink('Sample', href='/page_sample_manager')), 
-                        dbc.NavItem(dbc.NavLink('View', href='/page_viewer')), 
-                        # dbc.NavItem(dbc.NavLink('Health', href='/page_coral_health')), 
-                        dbc.NavItem(dbc.NavLink('Model', href='/page_yolo_model')), 
-                        # dbc.NavItem(dbc.NavLink('System', href='/page_setup')),                                                 
+                        dbc.NavItem(dbc.NavLink('Sample', href='/page_sample_manager')),
+                        dbc.NavItem(dbc.NavLink('View', href='/page_viewer')),
+                        dbc.NavItem(dbc.NavLink('Export', href='/bulk_exporter')),
+                        # dbc.NavItem(dbc.NavLink('Health', href='/page_coral_health')),
+                        dbc.NavItem(dbc.NavLink('Model', href='/page_yolo_model')),
+                        # dbc.NavItem(dbc.NavLink('System', href='/page_setup')),
                     ],
                     brand=brand_div,
                     brand_href='/page_monitor', color='#ffcc99', dark=False, className='fs-3 text-primary text')  # #ffcc99
@@ -150,7 +152,9 @@ class DashApplicationMain():
                 elif pathname == '/page_yolo_model':
                     page_content = self._yolo_model_file_page.layout() 
                 elif pathname == '/page_viewer':
-                    page_content = self._count_viewer_page.layout() 
+                    page_content = self._count_viewer_page.layout()
+                elif pathname == '/bulk_exporter':
+                    page_content = self._bulk_exporter_page.layout()
                 elif pathname == '/popup_viewer':
                     tile_id = params.get('tile_id', None)
                     if tile_id is None:

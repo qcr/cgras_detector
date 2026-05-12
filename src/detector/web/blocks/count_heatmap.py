@@ -32,7 +32,7 @@ class CountHeatmapBlock():
         self.default_style = {'visibility': 'hidden'}
         self.default_config = {'staticPlot': True}       
         self.reversed_heatmaps = False
-        self.default_count_range = (10, ) 
+        self.default_count_range = HeatmapHelper.DEFAULT_COUNT_RANGE
         # model variables
         # self.current_tile_id = None
         self.coral_trend_model = self.output_model = None

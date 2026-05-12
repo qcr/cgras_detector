@@ -912,7 +912,7 @@ class ImageReconstruct1DModel():
         # the desperate flag
         tried_desperate = False
         # the list of hyper-parameters for search
-        default_feature_detectors = ['brisk', 'sift']
+        default_feature_detectors = ['akaze', 'brisk', 'sift']
         try_feature_detectors = kwargs.get(ModelsConfigNames.RECO_FEATURE_DETECTORS.value, default_feature_detectors)
         self.logger.info(f'try_feature_detectors: {try_feature_detectors}')
         if type(try_feature_detectors) == str:

@@ -1,0 +1,20 @@
+name: acropora millepora SAME
+file: /home/qcr/cgras_data/YoloModel/cgras_data_2025_amil_trained_20260205_modelYolo8nseg_best_SAME.pt
+species: acropora millepora
+input_image_width: 640
+input_image_height: 640
+valid_start_day: 0
+valid_end_day: null
+# coral_classes: ['alive', 'mask_live']
+# dead_coral_classes: ['dead', 'mask_dead']
+classes_map: 
+  POLYP_SINGLE: []
+  POLYP_MULTI: ['alive_coral']
+  POLYP_KEYPART: []
+  DEAD_CORAL: ['dead_coral']
+remarks: 
+# yolo model predict parameters
+yolo_predict_params:
+  conf: 0.3    # default 0.25
+  iou:  0.8              # default 0.7
+  agnostic_nms:           # default False
