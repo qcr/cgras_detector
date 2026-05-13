@@ -81,6 +81,9 @@ RUN rm ${CGRAS_WS}/src/requirements.txt
 # RUN pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
 RUN pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
 RUN pip install ultralytics>=8.3
+# ultralytics pulls in opencv-python which overwrites opencv-contrib-python's cv2 binding;
+# reinstall contrib to restore cv2.detail stitching API compatibility
+RUN pip uninstall -y opencv-python && pip install opencv-contrib-python==4.8.1.78
 
 # complete rosdep installation
 RUN rosdep update
