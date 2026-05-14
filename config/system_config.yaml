@@ -86,6 +86,10 @@ cgras_detector:
   loctile_template_type: edge                      # 'edge' (2025+ black config) or 'block' (2024 blue corners)
   # detection task parameters: object detection
 
+  # NOTE for tile location, the 2024 cgras dataset/aims camera trolley images had the following parameters:
+  # block template style, template size 60, corner size 12
+  # for the 2025+ cgras dataset/aims camera trolley images, the parameters are:
+  # edge template style, template size 120, corner size 20
 
 
 # the parameters for the object detection model and post-processing
