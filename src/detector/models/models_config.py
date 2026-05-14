@@ -50,7 +50,8 @@ class ModelsConfigNames(Enum):
     LOCTILE_ROTATE_ANGLE_MAX = 'loctile_rotate_angle_max'
     LOCTILE_ASPECT_RATIO_DIFF_MAX_REL = 'loctile_aspect_ratio_diff_max_rel'
     LOCTILE_ASPECT_RATIO_DIFF_MAX_ABS = 'loctile_aspect_ratio_diff_max_abs'
-    
+    LOCTILE_TEMPLATE_TYPE = 'loctile_template_type'
+
     COD_MODEL_FILENAME = 'cod_model_filename'
     COD_DEBUG_BLOB_IMAGES = 'cod_debug_blob_images'
     COD_BLOB_OVERLAP_PIX = 'cod_blob_overlap_pix'

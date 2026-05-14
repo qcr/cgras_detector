@@ -18,3 +18,7 @@ yolo_predict_params:
   conf: 0.3    # default 0.25
   iou:  0.8              # default 0.7
   agnostic_nms:           # default False
+keep_object_filter:
+  apply: True        # True to apply filter
+  aspect_ratio_max:  4.5 # default 4.0
+  area_min:          100 # default 100 pixels 

@@ -58,7 +58,7 @@ cgras_detector:
   reco_working_scale: 0.08                     # the scale at which the reconstruction process operate on the images, default 0.10
   reco_tab_grid_image: True                    # output tab grid annotated images after tile location (working scale always)
   reco_manual_validation_original_scale: True  # output annotated and tab-grid images at original scale for manual validation
-  reco_debug_images_at_original_scale: False   # output all intermediate reconstruction images at original scale (large disk usage)
+  reco_debug_images_at_original_scale: True   # output all intermediate reconstruction images at original scale (large disk usage)
   reco_debug_feature_matching_images: True
   reco_feature_detectors: ['akaze', 'brisk', 'sift']     # sift, orb, brisk, akaze 
   reco_feature_matching_confidence_threshold: 0.8    # default 1.2
@@ -73,14 +73,22 @@ cgras_detector:
   # frame_size_in_mm: [280, 280] # default value, only if not defined in the metadata of the tile_sample 
 
   # detection task parameters: locate tile
-  loctile_pixel_classifier_filename: train_set_20250922_hsv.model   # ORIGINAL -> train_set_20250905.model
+  # NOTE for 2024 cgars dataset/aims camera trolley images:
+  # loctile_template_size was 60
+  # loctile_template_corner_size was 12
+  loctile_pixel_classifier_filename: train_set_1.model # latest: tile_corner_detector_hsv_black_20250922.model   # ORIGINAL -> train_set_20250905.model
   loctile_rotate_angle_max: 3.0   # degrees
   loctile_aspect_ratio_diff_max_rel: 0.05   # 0.05 relative difference
   loctile_aspect_ratio_diff_max_abs: 0.05   # 0.05 absolute difference
+  loctile_debug_images: True
   loctile_template_size: 120                     # pixels, default 60
   loctile_template_corner_size: 20                 # pixels, default 12
-  # detection task parameters: object detection  
+  loctile_template_type: edge                      # 'edge' (2025+ black config) or 'block' (2024 blue corners)
+  # detection task parameters: object detection
 
+
+
+# the parameters for the object detection model and post-processing
   cod_debug_blob_images: False
   cod_blob_overlap_pix: 128
   cod_use_cached_object_detection: True

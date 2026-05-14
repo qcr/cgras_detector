@@ -26,3 +26,4 @@ from .monitor_task_stat import MonitorTaskStatBlock
 from .health_view_table import HealthViewTable
 from .health_model_import import HealthModelFileImportBlock
 from .health_model_table import HealthModelTable
+from .loctile_model_select import LocTileModelSelectBlock

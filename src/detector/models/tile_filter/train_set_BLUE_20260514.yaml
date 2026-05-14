@@ -1,0 +1,28 @@
+train_set:
+  - image_file: /home/qcr/cgras_ws/src/cgras_detector/src/detector/models/tile_filter/samples/CGRAS_Amag_241031_T01_00.jpg
+    frame: [[2, 22, 71, 199], [307, 12, 218, 41]]
+    tile: [[94, 69, 167, 193]]
+  - image_file: /home/qcr/cgras_ws/src/cgras_detector/src/detector/models/tile_filter/samples/CGRAS_Amag_241105_T01_00.jpg
+    frame: [[9, 53, 50, 154], [302, 15, 316, 14]]
+    tile: [[84, 59, 41, 425]]  
+  - image_file: /home/qcr/cgras_ws/src/cgras_detector/src/detector/models/tile_filter/samples/CGRAS_Amag_241211_T01_00.jpg
+    frame: [[11, 29, 76, 116], [289, 7, 467, 20]]
+    tile: [[197, 34, 150, 448]]   
+  - image_file: /home/qcr/cgras_ws/src/cgras_detector/src/detector/models/tile_filter/samples/CGRAS_Amag_20241223_T1_00.jpg
+    frame: [[12, 29, 70, 193], [573, 4, 209, 10]]
+    tile: [[108, 24, 302, 212]] 
+  - image_file: /home/qcr/cgras_ws/src/cgras_detector/src/detector/models/tile_filter/samples/CGRAS_Amag_241126_T2_00.jpg
+    frame: [[9, 12, 79, 70], [293, 8, 321, 37]]
+    tile: [[105, 65, 159, 236]]  
+  - image_file: /home/qcr/cgras_ws/src/cgras_detector/src/detector/models/tile_filter/samples/CGRAS_Amag_241031_T03_23.jpg
+    frame: [[743, 318, 50, 184], [24, 489, 240, 35]]
+    tile: [[494, 79, 181, 366]] 
+  - image_file: /home/qcr/cgras_ws/src/cgras_detector/src/detector/models/tile_filter/samples/2024Oct-982091078955895_CG1-250903142352_0_3.jpg
+    frame: [[290, 664, 21, 114], [14, 785, 21, 41], [55, 1052, 290, 107]]
+    tile: [[375, 299, 338, 412], [15, 16, 200, 678]]    
+  - image_file: /home/qcr/cgras_ws/src/cgras_detector/src/detector/models/tile_filter/samples/2024Oct-982091078955895_CG1-250903142352_4_0.jpg
+    frame: [[344, 324, 190, 14], [7, 325, 70, 27]]
+    tile: [[112, 435, 544, 477]]  
+  - image_file: /home/qcr/cgras_ws/src/cgras_detector/src/detector/models/tile_filter/samples/CGRAS_Amil_Room9_20241128_w0_T01_00_crop.jpg
+    frame: [[480, 178, 500, 500] ]
+    tile: [[80, 80, 200, 200]]

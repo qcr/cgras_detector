@@ -10,7 +10,7 @@ __email__ = 'ak.lui@qut.edu.au'
 __status__ = 'Development'
 
 # general modules
-import os, sys, threading, collections, time, shutil, traceback
+import os, sys, threading, collections, time, shutil, traceback, fcntl
 from enum import Enum
 from datetime import datetime
 # project modules
@@ -108,18 +108,26 @@ class ApplicationFileManager():
 
     # --- copy the images in the images folder and web scripts to the system folder of detector
     def populate_system_assets_folder(self):
+        # A file lock prevents two processes (e.g. cgras_detector_node and detector_aux_server_node)
+        # from running this concurrently — the rmtree in one would otherwise delete the destination
+        # while the other's copytree is writing into it.
+        lock_path = os.path.join(self.get_detector_folder(self.SYSTEM_SUBFOLDER), '.populate.lock')
         try:
-            system_folder_path = self.get_detector_folder(self.SYSTEM_SUBFOLDER)
-            logger.info(f'ApplicationFileManager: populating system folder at {system_folder_path}')
-            shutil.rmtree(self.get_detector_folder(self.SYSTEM_SCRIPTS_SUBFOLDER), ignore_errors=True)
-            shutil.rmtree(self.get_detector_folder(self.SYSTEM_IMAGES_SUBFOLDER), ignore_errors=True)
-            source_path = os.path.join(os.path.dirname(__file__), 'web/_system/scripts')
-            # logger.info(f'ApplicationFileManager.populate_system_assets_folder: copy {source_path} to {system_folder_path}')
-            shutil.copytree(source_path, self.get_detector_folder(self.SYSTEM_SCRIPTS_SUBFOLDER), dirs_exist_ok=True)
-            source_path = os.path.join(os.path.dirname(__file__), 'web/_system/images')
-            # logger.info(f'ApplicationFileManager.populate_system_assets_folder: copy {source_path} to {system_folder_path}')
-            shutil.copytree(source_path, self.get_detector_folder(self.SYSTEM_IMAGES_SUBFOLDER), dirs_exist_ok=True)            
-            # self.generate_pattern_images()
+            with open(lock_path, 'w') as lock_file:
+                fcntl.flock(lock_file, fcntl.LOCK_EX)
+                try:
+                    system_folder_path = self.get_detector_folder(self.SYSTEM_SUBFOLDER)
+                    logger.info(f'ApplicationFileManager: populating system folder at {system_folder_path}')
+                    source_path = os.path.join(os.path.dirname(__file__), 'web/_system/scripts')
+                    if os.path.isdir(source_path):
+                        shutil.rmtree(self.get_detector_folder(self.SYSTEM_SCRIPTS_SUBFOLDER), ignore_errors=True)
+                        shutil.copytree(source_path, self.get_detector_folder(self.SYSTEM_SCRIPTS_SUBFOLDER), dirs_exist_ok=True)
+                    source_path = os.path.join(os.path.dirname(__file__), 'web/_system/images')
+                    if os.path.isdir(source_path):
+                        shutil.rmtree(self.get_detector_folder(self.SYSTEM_IMAGES_SUBFOLDER), ignore_errors=True)
+                        shutil.copytree(source_path, self.get_detector_folder(self.SYSTEM_IMAGES_SUBFOLDER), dirs_exist_ok=True)
+                finally:
+                    fcntl.flock(lock_file, fcntl.LOCK_UN)
             return True
         except Exception as e:
             logger.warning(f'ApplicationFileManager.populate_system_assets_folder: {traceback.format_exc()}')

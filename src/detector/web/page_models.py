@@ -16,7 +16,7 @@ import dash_bootstrap_components as dbc
 # project modules
 from dash.exceptions import PreventUpdate
 from cgras_datatools.logging_tools import logger
-from detector.web.blocks import YoloModelFileImportBlock, YoloModelTable, YoloModelRangeChartBlock, HealthModelFileImportBlock, HealthModelTable
+from detector.web.blocks import YoloModelFileImportBlock, YoloModelTable, YoloModelRangeChartBlock, HealthModelFileImportBlock, HealthModelTable, LocTileModelSelectBlock
 
 dash.register_page(__name__)
 
@@ -32,6 +32,8 @@ class ModelsPage():
         # the health model blocks
         # self.health_model_file_import_panel = HealthModelFileImportBlock(app, prefix)
         # self.health_model_table_panel = HealthModelTable(app, prefix)
+        # the loctile model selection block
+        self.loctile_model_select_panel = LocTileModelSelectBlock(app, prefix)
         self._define_page()
     
     def layout(self, validate=False):
@@ -58,11 +60,15 @@ class ModelsPage():
                      ], className='mx-auto mt-3'), 
             
             # dbc.Row(html.H4(children = 'Import Health Model', className='text-center mt-5 mb-3')),
-            # dbc.Row([dbc.Col(self.health_model_file_import_panel.get_panel(), className='col-12 border'), 
-            #          ], className='mx-auto'), 
+            # dbc.Row([dbc.Col(self.health_model_file_import_panel.get_panel(), className='col-12 border'),
+            #          ], className='mx-auto'),
             # dbc.Row(html.H4(children = 'Health Models', className='text-center mt-5 mb-3')),
-            # dbc.Row([dbc.Col(self.health_model_table_panel.get_panel(), className='col-12 border'), 
-            #          ], className='mx-auto'),  
+            # dbc.Row([dbc.Col(self.health_model_table_panel.get_panel(), className='col-12 border'),
+            #          ], className='mx-auto'),
+
+            dbc.Row(html.H3(children='Tile Corner Detection Model Manager', className='mt-5 mb-3')),
+            dbc.Row([dbc.Col(self.loctile_model_select_panel.get_panel(), className='col-12 border'),
+                     ], className='mx-auto mt-3'),
                                  
         ], className='mx-auto col-10 mb-5')
         self._layout = dbc.Container(rows, fluid=True)
