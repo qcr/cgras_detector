@@ -80,29 +80,29 @@ class DashApplicationMain():
 
     def _define_app(self):
         # brand_div = html.Div([html.H3('CGRAS Coral Counting and Visualization'), html.H6('Robotics and Autonomous Systems Group, REF, RI, Queensland University of Technology')])    
-        brand_div = dbc.Row([
+        brand_div = html.Div([
+            html.Img(src='/assets/images/QUTLogo.png',   height='60', className='me-2'),
+            html.Img(src='/assets/images/CGRASLogo2.png', height='60', className='me-3'),
             html.Div([
-                html.Img(src='/assets/images/QUTLogo.png',  height='75', className='me-3'),
-                
-                html.Img(src='/assets/images/CGRASLogo2.png', height='75'),
-            ], className='col-3 mx-auto'),
-            html.Div([html.H3('CGRAS Coral Counting and Visualization'), 
-                      html.H6('Robotics and Autonomous Systems Group, REF')
-                      ], className='col-9')
-        ])
+                html.Div('CGRAS Coral Counting and Visualisation',
+                         className='fw-bold', style={'fontSize': '1.5rem', 'lineHeight': '1.25'}),
+                html.Div('Robotics and Autonomous Systems Group, REF',
+                         style={'fontSize': '1.0rem', 'opacity': '0.75'}),
+            ]),
+        ], className='d-flex align-items-center')
         self._navbar_with_menu = dbc.NavbarSimple(
                     children=[
-                        dbc.NavItem(dbc.NavLink('About', href='/page_about')),
-                        dbc.NavItem(dbc.NavLink('Monitor', href='/page_monitor')),
-                        dbc.NavItem(dbc.NavLink('Sample', href='/page_sample_manager')),
-                        dbc.NavItem(dbc.NavLink('View', href='/page_viewer')),
-                        dbc.NavItem(dbc.NavLink('Export', href='/bulk_exporter')),
-                        # dbc.NavItem(dbc.NavLink('Health', href='/page_coral_health')),
-                        dbc.NavItem(dbc.NavLink('Model', href='/page_yolo_model')),
-                        # dbc.NavItem(dbc.NavLink('System', href='/page_setup')),
+                        dbc.NavItem(dbc.NavLink('Monitor', href='/page_monitor', className='fs-4')),
+                        dbc.NavItem(dbc.NavLink('Sample',  href='/page_sample_manager', className='fs-4')),
+                        dbc.NavItem(dbc.NavLink('View',    href='/page_viewer', className='fs-4')),
+                        dbc.NavItem(dbc.NavLink('Export',  href='/bulk_exporter', className='fs-4')),
+                        # dbc.NavItem(dbc.NavLink('Health', href='/page_coral_health', className='fs-4')),
+                        dbc.NavItem(dbc.NavLink('Model',   href='/page_yolo_model', className='fs-4')),
+                        dbc.NavItem(dbc.NavLink('About',   href='/page_about', className='fs-4')),
+                        # dbc.NavItem(dbc.NavLink('System', href='/page_setup', className='fs-4')),
                     ],
                     brand=brand_div,
-                    brand_href='/page_monitor', color='#ffcc99', dark=False, className='fs-3 text-primary text')  # #ffcc99
+                    brand_href='/page_monitor', fluid=True, color='#ffcc99', dark=False, className='text-primary px-5')
 
         # self._navbar_simple = dbc.NavbarSimple(
         #             brand=html.H3('CGRAS Coral Counting and Visualization'), color='#cccc99', className='fs-4 text')      
