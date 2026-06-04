@@ -1,4 +1,4 @@
-# Copyright 2024 - Andrew Kwok Fai LUI, 
+# Copyright 2024 - Andrew Kwok Fai LUI,
 # Robotics and Autonomous Systems Group, REF, RI
 # and the Queensland University of Technology
 
@@ -9,26 +9,24 @@ __version__ = '1.0'
 __email__ = 'ak.lui@qut.edu.au'
 __status__ = 'Development'
 
-import time, numbers
+import numbers
 import pandas as pd
 # dash modules
 import dash
 from dash import html, dcc, Input, Output, State, dash_table, ctx
 import dash_bootstrap_components as dbc
 from dash.exceptions import PreventUpdate
-from detector.model import DETECT_DAO, PERSISTENT_STORE_DAO
+from detector.model import DETECT_DAO
 from cgras_datatools.logging_tools import logger
 
 class CountTileSelectTable():
     def __init__(self, app, prefix, page_size=25):
-        self.app = app 
+        self.app = app
         self.prefix = prefix = prefix + 'ctst_'
         self.update_panel_store_id = self.prefix + 'update_panel_store'
         self.update_datatable_store_id = self.prefix + 'update_datatable_store'
         self.row_selected_trigger_id = self.prefix + 'row_selected_store'
-        # define model variables
         self._model = None
-        # define widgets 
         self._operators = [['ge ', '>='],
                     ['le ', '<='],
                     ['lt ', '<'],
@@ -37,83 +35,133 @@ class CountTileSelectTable():
                     ['eq ', '='],
                     ['contains '],
                     ['datestartswith ']]
-        self._columns = [{'name': 'Tile ID', 'id': 'tile_id', 'type': 'text', 'editable': False},
-                         {'name': 'Species', 'id': 'species', 'type': 'text', 'editable': False},
-                         {'name': 'Settled On', 'id': 'settle_time', 'type': 'datetime', 'editable': False},
+        self._columns = [{'name': 'Tile ID',    'id': 'tile_id',    'type': 'text',     'editable': False},
+                         {'name': 'Species',    'id': 'species',    'type': 'text',     'editable': False},
+                         {'name': 'Settled On', 'id': 'settle_time','type': 'datetime', 'editable': False},
                          ]
-        self._datatable = dash_table.DataTable(id=prefix+'datatable', columns=self._columns, style_header={}, fill_width=True, 
-                                                page_current=0, page_size=page_size, page_action='custom',
-                                                filter_action='custom', filter_query='', row_selectable=False,
-                                                cell_selectable=True, row_deletable=False, style_cell={'fontSize': 14}) 
+        self._datatable = dash_table.DataTable(
+            id=prefix+'datatable', columns=self._columns, style_header={}, fill_width=True,
+            page_current=0, page_size=page_size, page_action='custom',
+            filter_action='custom', filter_query='', row_selectable=False,
+            cell_selectable=True, row_deletable=False, style_cell={'fontSize': 14})
+
+        # --- Filter bar ---
+        species_dropdown = dcc.Dropdown(
+            id=prefix+'species_filter', multi=True,
+            placeholder='All species', clearable=True,
+            style={'width': '100%'})
+
+        season_dropdown = dcc.Dropdown(
+            id=prefix+'season_filter', multi=True,
+            placeholder='All seasons', clearable=True,
+            style={'width': '100%'})
+
+        tile_id_input = dcc.Input(
+            id=prefix+'tile_id_filter', type='text',
+            placeholder='Tile ID contains…', debounce=True,
+            style={'width': '100%', 'height': '36px', 'padding': '4px 8px'})
+
+        date_picker_start = dcc.DatePickerSingle(
+            id=prefix+'date_start', placeholder='Start date',
+            clearable=True, display_format='YYYY-MM-DD',
+            style={'fontSize': '13px'})
+
+        date_picker_end = dcc.DatePickerSingle(
+            id=prefix+'date_end', placeholder='End date',
+            clearable=True, display_format='YYYY-MM-DD',
+            style={'fontSize': '13px'})
+
+        filter_card = dbc.Card(dbc.CardBody([
+            dbc.Row(dbc.Col([html.Label('Species',       className='fw-semibold mb-1 small'), species_dropdown],    width=12), className='mb-2'),
+            dbc.Row(dbc.Col([html.Label('Season',        className='fw-semibold mb-1 small'), season_dropdown],     width=12), className='mb-2'),
+            dbc.Row(dbc.Col([html.Label('Tile ID',       className='fw-semibold mb-1 small'), tile_id_input],       width=12), className='mb-2'),
+            dbc.Row(dbc.Col([html.Label('Capture Start', className='fw-semibold mb-1 small'), date_picker_start],   width=12), className='mb-2'),
+            dbc.Row(dbc.Col([html.Label('Capture End',   className='fw-semibold mb-1 small'), date_picker_end],     width=12)),
+        ]), className='mb-2 shadow-sm', style={'fontSize': '13px'})
 
         self.the_panel = html.Div([
-                html.H4([dbc.Badge('TILES IN THE SELECTED SEASON', color='white', text_color='secondary'), ]),
-                dcc.Dropdown(id=prefix+'season_list_dropdown', 
-                                       searchable=False, clearable=False, className='ms-2 small mb-2', maxHeight=80, style={'width': '200px'}),
+                html.H4([dbc.Badge('TILE BROWSER', color='white', text_color='secondary')]),
+                filter_card,
                 dbc.Row(html.Div(self._datatable)),
                 dcc.Store(id=self.update_panel_store_id),
                 dcc.Store(id=self.update_datatable_store_id),
-                dcc.Store(id=self.row_selected_trigger_id),     
-            ], id=prefix+'main_panel', style={'margin-top':'24px'})     
-        
-        # self.app.callback([Output(self.row_selected_trigger_id, 'data'),
-        #                     Output(prefix+'datatable', 'style_data_conditional'),
-        #                     Output(prefix+'datatable', 'selected_rows', allow_duplicate=True)],
-        #     [Input(prefix+'datatable', 'selected_rows'),
-        #      State(self.prefix+'datatable', 'data'),
-        #      State(self.prefix+'datatable', 'page_current'),
-        #      State(self.prefix+'datatable', 'page_size'),
-        #      ], prevent_initial_call=True)(self._row_selected())
-        
-        self.app.callback([Output(self.row_selected_trigger_id, 'data'),
-                            Output(prefix+'datatable', 'selected_cells', allow_duplicate=True),
-                            Output(prefix+'datatable', 'active_cell', allow_duplicate=True),
-                            Output(prefix+'datatable', 'style_data_conditional', allow_duplicate=True),],
-            [Input(prefix+'datatable', 'active_cell'),
-             State(self.prefix+'datatable', 'data'),
-             State(self.prefix+'datatable', 'page_current'),
-             State(self.prefix+'datatable', 'page_size'),], prevent_initial_call=True)(self._cb_cell_selected())        
-    
-        self.app.callback([Output(self.prefix+'datatable', 'data'),
-                           Output(prefix+'datatable', 'selected_rows', allow_duplicate=True)],
+                dcc.Store(id=self.row_selected_trigger_id),
+            ], id=prefix+'main_panel', style={'margin-top': '24px'})
+
+        # Populate filter dropdowns on page load
+        self.app.callback(
+            [Output(prefix+'species_filter', 'options'),
+             Output(prefix+'season_filter',  'options')],
+            [Input(prefix+'main_panel', 'children')],
+            prevent_initial_call='initial_duplicate'
+        )(self._cb_populate_filters())
+
+        # Any filter change -> pack into store -> triggers datatable refresh
+        self.app.callback(
+            [Output(self.update_datatable_store_id, 'data', allow_duplicate=True)],
+            [Input(prefix+'species_filter', 'value'),
+             Input(prefix+'season_filter',  'value'),
+             Input(prefix+'tile_id_filter', 'value'),
+             Input(prefix+'date_start',     'date'),
+             Input(prefix+'date_end',       'date')],
+            prevent_initial_call='initial_duplicate'
+        )(self._cb_filter_changed())
+
+        # Datatable data — triggered by pagination/filter/sort or store change
+        self.app.callback(
+            [Output(self.prefix+'datatable', 'data'),
+             Output(prefix+'datatable', 'selected_rows', allow_duplicate=True)],
             [Input(self.prefix+'datatable', 'page_current'),
              Input(self.prefix+'datatable', 'page_size'),
              Input(self.prefix+'datatable', 'sort_by'),
              Input(self.prefix+'datatable', 'filter_query'),
-             State(self.prefix+'season_list_dropdown', 'value'),
-             Input(self.update_datatable_store_id, 'data'),
-             ], prevent_initial_call='initial_duplicate')(self._update_datatable())
-        
-        # define callback for the season
-        self.app.callback([Output(self.prefix+'season_list_dropdown', 'options', allow_duplicate=False),
-                            Output(self.prefix+'season_list_dropdown', 'value', allow_duplicate=False)],
-                         [Input(self.prefix+'main_panel', 'children'),], prevent_initial_call='initial_duplicate')(self._update_season_dropdown())       
+             Input(self.update_datatable_store_id, 'data')],
+            prevent_initial_call='initial_duplicate'
+        )(self._update_datatable())
 
-        self.app.callback([Output(self.update_datatable_store_id, 'data', allow_duplicate=True)],
-                         [Input(self.prefix+'season_list_dropdown', 'value'),], prevent_initial_call='initial_duplicate')(self._season_dropdown_changed())    
-        
-        # define callback for the season dropdown
-        self.app.callback([Output(self.prefix+'season_list_dropdown', 'options', allow_duplicate=True),
-                            Output(self.prefix+'season_list_dropdown', 'value', allow_duplicate=True)],
-                         [Input(self.prefix+'main_panel', 'children'),], prevent_initial_call='initial_duplicate')(self._update_season_dropdown())  
+        # Cell click -> row highlight + downstream tile-selected trigger
+        self.app.callback(
+            [Output(self.row_selected_trigger_id, 'data'),
+             Output(prefix+'datatable', 'selected_cells',        allow_duplicate=True),
+             Output(prefix+'datatable', 'active_cell',           allow_duplicate=True),
+             Output(prefix+'datatable', 'style_data_conditional',allow_duplicate=True)],
+            [Input(prefix+'datatable', 'active_cell'),
+             State(self.prefix+'datatable', 'data'),
+             State(self.prefix+'datatable', 'page_current'),
+             State(self.prefix+'datatable', 'page_size')],
+            prevent_initial_call=True
+        )(self._cb_cell_selected())
 
     def get_panel(self):
         return self.the_panel
-    
+
     def get_row_selected_trigger_id(self) -> str:
         return self.row_selected_trigger_id
-    
-    def _get_default_datatable_model(self, season_title):
-        # model = DETECT_DAO.list_tiles_in_cache_tile_health(season_title)
-        model = DETECT_DAO.list_tiles_in_tile_sample(season_title=season_title)
-        return model
-    
-    def refine_datatable_model(self, model):
-        model = model[['tile_id', 'species', 'settle_time']]
-        to_drop = []
-        model = model.drop(to_drop, axis=1)
-        return model
-    
+
+    # ------------------------------------------------------------------
+    # Data helpers
+    # ------------------------------------------------------------------
+    def _get_filtered_tiles(self, species_list, season_list, tile_id_filter, date_start, date_end):
+        df = DETECT_DAO.query_processed_tile_samples(the_period=0)
+        if df is None or len(df) == 0:
+            return pd.DataFrame(columns=['tile_id', 'species', 'settle_time'])
+        if species_list:
+            df = df[df['species'].isin(species_list)]
+        if season_list:
+            df = df[df['season'].isin(season_list)]
+        if tile_id_filter:
+            df = df[df['tile_id'].str.contains(tile_id_filter, case=False, na=False)]
+        if date_start:
+            df = df[df['batch_time'].str[:10] >= date_start]
+        if date_end:
+            df = df[df['batch_time'].str[:10] <= date_end]
+        tiles = df.groupby('tile_id').agg(
+            species=('species', 'first'),
+            settle_time=('settle_time', 'first'),
+        ).reset_index()
+        return tiles[['tile_id', 'species', 'settle_time']].sort_values(
+            ['species', 'tile_id']).reset_index(drop=True)
+
     def split_filter_part(self, filter_part):
         for operator_type in self._operators:
             for operator in operator_type:
@@ -129,89 +177,69 @@ class CountTileSelectTable():
                             value = int(value_part)
                         except ValueError:
                             value = value_part
-                    # word operators need spaces after them in the filter string, but we don't want these later
                     return name, operator_type[0].strip(), value
         return [None] * 3
 
-    def _update_season_dropdown(self):
-        def update_season_dropdown(timer):
-            # get options for the dropdown
-            options = DETECT_DAO.list_seasons_in_tile_sample()
-            value = PERSISTENT_STORE_DAO.get_config_value(PERSISTENT_STORE_DAO.CONFIG_SELECTED_SEASON, None)
-            value = options[0] if value is None and options else value
-            options = [{'label': f'{x} Season', 'value': x} for x in options]           
-            return (options, value,)
-        return update_season_dropdown
+    # ------------------------------------------------------------------
+    # Callbacks
+    # ------------------------------------------------------------------
+    def _cb_populate_filters(self):
+        def populate_filters(_):
+            species = [{'label': s, 'value': s}
+                       for s in DETECT_DAO.list_species_in_tile_sample()]
+            seasons = [{'label': f'{s} Season', 'value': s}
+                       for s in DETECT_DAO.list_seasons_in_tile_sample()]
+            return species, seasons
+        return populate_filters
 
-    def _season_dropdown_changed(self):
-        def season_dropdown_changed(season_title):
-            if not season_title:
-                raise PreventUpdate
-            # update the selected season in the persistent storage
-            try:
-                PERSISTENT_STORE_DAO.set_config_value(PERSISTENT_STORE_DAO.CONFIG_SELECTED_SEASON, season_title)
-            except:
-                ...
-            return (season_title,)
-        return season_dropdown_changed
+    def _cb_filter_changed(self):
+        def filter_changed(species_list, season_list, tile_id_filter, date_start, date_end):
+            return ({'species': species_list, 'seasons': season_list,
+                     'tile_id': tile_id_filter,
+                     'date_start': date_start, 'date_end': date_end},)
+        return filter_changed
 
     def _update_datatable(self):
-        def update_datatable(page_current, page_size, sort_by, filter, season_title, store):
-            self._model = self._get_default_datatable_model(season_title)
-            self._model = self.refine_datatable_model(self._model)            
+        def update_datatable(page_current, page_size, sort_by, filter_query, store):
+            species_list = season_list = tile_id_filter = date_start = date_end = None
+            if isinstance(store, dict):
+                species_list  = store.get('species')
+                season_list   = store.get('seasons')
+                tile_id_filter = store.get('tile_id')
+                date_start    = store.get('date_start')
+                date_end      = store.get('date_end')
+
+            self._model = self._get_filtered_tiles(
+                species_list, season_list, tile_id_filter, date_start, date_end)
             model = self._model
-            filtering_expressions = filter.split(' && ')            
-            for filter_part in filtering_expressions:
+
+            # Apply Dash DataTable column-level filters
+            for filter_part in (filter_query or '').split(' && '):
                 col_name, operator, filter_value = self.split_filter_part(filter_part)
+                if col_name is None:
+                    continue
                 if operator in ('eq', 'ne', 'lt', 'le', 'gt', 'ge'):
-                    # these operators match pandas series operator method names
                     model = model.loc[getattr(model[col_name], operator)(filter_value)]
                 elif operator == 'contains':
                     if isinstance(filter_value, numbers.Number):
                         filter_value = str(filter_value)
                     model = model.loc[model[col_name].str.contains(filter_value)]
                 elif operator == 'datestartswith':
-                    # this is a simplification of the front-end filtering logic,
-                    # only works with complete fields in standard format
                     model = model.loc[model[col_name].str.startswith(filter_value)]
-            try:
-                # update the selected season in the persistent storage
-                PERSISTENT_STORE_DAO.set_config_value(PERSISTENT_STORE_DAO.CONFIG_SELECTED_SEASON, season_title)
-            except:
-                ...
-            return (model.iloc[page_current * page_size:(page_current + 1) * page_size].to_dict('records'), [], )
-        return update_datatable 
-    
-    # def _row_selected(self):
-    #     def row_selected(selected_rows, model, page_current, page_size):
-    #         if selected_rows is None:
-    #             return dash.no_update
-    #         if len(selected_rows) >= 2:
-    #             selected_rows.pop(0)   # assume that the new row is added to the end of the selected_row list
-    #         if len(selected_rows) == 1:
-    #             row = selected_rows[0]
-    #             tile_id = model[row]['tile_id']
-    #         else:
-    #             tile_id = None
-    #         style_data_conditional = [
-    #             {"if": {"filter_query": "{{tile_id}} = '{}'".format(model[i]['tile_id'])}, "backgroundColor": "yellow",}
-    #             for i in selected_rows
-    #         ]
-    #         return (tile_id, style_data_conditional, selected_rows,)
-    #     return row_selected
 
-    # callback when a cell in the table is clicked, which triggers a query after composing a query string and highlight the row
+            page_start = page_current * page_size
+            return (model.iloc[page_start: page_start + page_size].to_dict('records'), [])
+        return update_datatable
+
     def _cb_cell_selected(self):
         def cb_cell_selected(active_cell, model, page_current, page_size):
             if active_cell is None:
                 raise PreventUpdate
-            row, tile_x = active_cell['row'], active_cell['column']
+            row = active_cell['row']
             tile_id = model[row]['tile_id']
-            query_dict = {
-                'tile_id': tile_id,
-            }
             style_data_conditional = [
-                {"if": {"filter_query": "{{tile_id}} = '{}'".format(tile_id)}, "backgroundColor": "yellow",}
+                {'if': {'filter_query': "{{tile_id}} = '{}'".format(tile_id)},
+                 'backgroundColor': 'yellow'}
             ]
-            return (tile_id, [], None, style_data_conditional,)
+            return (tile_id, [], None, style_data_conditional)
         return cb_cell_selected

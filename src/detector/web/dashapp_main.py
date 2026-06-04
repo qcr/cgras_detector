@@ -50,7 +50,7 @@ APP.config['suppress_callback_exceptions'] = True
 RESTX_API.init_app(SERVER)
 
 # -- load the pages for the dash application which should appear after the above APP creation
-from . import page_count_display, page_dashboard, page_db_browse, page_models, page_sample_manager, page_coral_health, page_system_setup, popup_count_display, page_bulk_exporter
+from . import page_count_display, page_dashboard, page_db_browse, page_models, page_sample_manager, page_coral_health, page_system_setup, popup_count_display, page_bulk_exporter, page_about
 
 # -- Create a dash application object
 class DashApplicationMain():
@@ -72,6 +72,7 @@ class DashApplicationMain():
         self._count_viewer_page = page_count_display.CountViewerPage(self.app)
         self._page_coral_health = page_coral_health.CoralHealthPage(self.app)
         self._bulk_exporter_page = page_bulk_exporter.BulkExporterPage(self.app)
+        self._about_page = page_about.AboutPage(self.app)
         # define the popup
         self._count_viewer_popup = popup_count_display.CountViewerPopup(self.app)
         # initialize the application
@@ -91,6 +92,7 @@ class DashApplicationMain():
         ])
         self._navbar_with_menu = dbc.NavbarSimple(
                     children=[
+                        dbc.NavItem(dbc.NavLink('About', href='/page_about')),
                         dbc.NavItem(dbc.NavLink('Monitor', href='/page_monitor')),
                         dbc.NavItem(dbc.NavLink('Sample', href='/page_sample_manager')),
                         dbc.NavItem(dbc.NavLink('View', href='/page_viewer')),
@@ -145,7 +147,9 @@ class DashApplicationMain():
             parsed_url = urlparse(href)
             params = parse_qs(parsed_url.query)
             try: 
-                if pathname == '/page_monitor':
+                if pathname == '/page_about':
+                    page_content = self._about_page.layout()
+                elif pathname == '/page_monitor':
                     page_content = self._dashboard_page.layout()
                 elif pathname == '/page_sample_manager':
                     page_content = self._sample_manager_page.layout()    

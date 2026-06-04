@@ -71,7 +71,7 @@ class BulkExporterPage():
         filter_row = dbc.Row([
             dbc.Col([html.Label('Species',             className='fw-semibold mb-1'), species_dropdown],  className='col-auto'),
             dbc.Col([html.Label('Season',              className='fw-semibold mb-1'), season_dropdown],   className='col-auto'),
-            dbc.Col([html.Label('Tile ID',             className='fw-semibold mb-1'), tile_id_input],     className='col-auto'),
+            dbc.Col([html.Label('Tile ID',             className='fw-semibold d-block mb-1'), tile_id_input],     className='col-auto'),
             dbc.Col([html.Label('Capture Start Date',  className='fw-semibold mb-1'), date_picker_start], className='col-auto'),
             dbc.Col([html.Label('Capture End Date',    className='fw-semibold mb-1'), date_picker_end],   className='col-auto'),
         ], className='g-3 align-items-end mb-3')

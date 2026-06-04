@@ -47,25 +47,40 @@ class TileSampleTable():
         self._columns = [{'name': 'Tile Sample ID', 'id': 'id', 'type': 'text', 'editable': False},
                          {'name': 'Capture Time', 'id': 'batch_time', 'type': 'datetime', 'editable': False},
                          {'name': 'Season', 'id': 'season', 'type': 'text', 'editable': False},
+                         {'name': 'Species', 'id': 'species', 'type': 'text', 'editable': False},
                          {'name': 'Age', 'id': 'age', 'type': 'text', 'editable': False},
                          {'name': 'Settled On', 'id': 'settle_time', 'type': 'text', 'editable': False},
                          # {'name': 'Importer', 'id': 'importer_id', 'type': 'text', 'editable': False},
-                         {'name': 'Import Time', 'id': 'create_time', 'type': 'text', 'editable': False},  
-                         {'name': 'Status', 'id': 'status', 'type': 'text', 'editable': False},    
-                         {'name': 'Remarks', 'id': 'remarks', 'type': 'text', 'editable': False},                                                                         
+                         {'name': 'Import Time', 'id': 'create_time', 'type': 'text', 'editable': False},
+                         {'name': 'Status', 'id': 'status', 'type': 'text', 'editable': False},
+                         {'name': 'Remarks', 'id': 'remarks', 'type': 'text', 'editable': False},
                          ]
     
-        self._style_cell_conditional=[
-            {'if': {'column_id': 'remarks'},
-            'fontSize': 14}
+        self._style_cell_conditional = [
+            {'if': {'column_id': 'id'},          'maxWidth': '160px'},
+            {'if': {'column_id': 'batch_time'},  'maxWidth': '130px'},
+            {'if': {'column_id': 'season'},      'maxWidth': '80px'},
+            {'if': {'column_id': 'species'},     'maxWidth': '140px'},
+            {'if': {'column_id': 'age'},         'maxWidth': '50px', 'textAlign': 'center'},
+            {'if': {'column_id': 'settle_time'}, 'maxWidth': '95px'},
+            {'if': {'column_id': 'create_time'}, 'maxWidth': '130px'},
+            {'if': {'column_id': 'status'},      'maxWidth': '75px'},
+            {'if': {'column_id': 'remarks'},     'maxWidth': '160px', 'fontSize': 14},
         ]
+        _style_cell = {
+            'overflow': 'hidden', 'textOverflow': 'ellipsis', 'whiteSpace': 'nowrap',
+            'fontSize': 13, 'padding': '6px 8px', 'textAlign': 'left',
+        }
+        _style_table = {'overflowX': 'auto'}
         if paginagate is not None and isinstance(paginagate, int):
             self._datatable = dash_table.DataTable(id=prefix+'datatable', columns=self._columns, fill_width=True, row_selectable='multi',
-                                               style_cell_conditional=self._style_cell_conditional, 
+                                               style_cell=_style_cell, style_cell_conditional=self._style_cell_conditional,
+                                               style_table=_style_table, tooltip_delay=0, tooltip_duration=None,
                                                cell_selectable=allow_view, row_deletable=False, page_current=0, page_size=paginagate)
         else:
             self._datatable = dash_table.DataTable(id=prefix+'datatable', columns=self._columns, fill_width=True, row_selectable='multi',
-                                               style_cell_conditional=self._style_cell_conditional, 
+                                               style_cell=_style_cell, style_cell_conditional=self._style_cell_conditional,
+                                               style_table=_style_table, tooltip_delay=0, tooltip_duration=None,
                                                cell_selectable=allow_view, row_deletable=False)
 
         self._viewdata_modal = dbc.Modal([
@@ -199,7 +214,8 @@ class TileSampleTable():
                             [Input(prefix+'datatable', 'derived_viewport_selected_rows'),
                              State(prefix+'datatable', 'data')])(self._style_selected_rows())
         
-        self.app.callback([Output(self.prefix+'datatable', 'data')],
+        self.app.callback([Output(self.prefix+'datatable', 'data'),
+                           Output(self.prefix+'datatable', 'tooltip_data')],
             [Input(self.update_table_store_id, 'data')], prevent_initial_call=True, allow_duplicate=True)(self._update_datatable())       
         
         self.app.callback([Output(self.prefix+'datatable', 'selected_rows')],
@@ -226,20 +242,29 @@ class TileSampleTable():
         return model
     
     def refine_datatable_model(self, model, show_column_top=True, show_column_refresh=False):
-        model['status'] = model['status'].apply(lambda x: SampleStatusNames(x).name) 
-        model = model[['id', 'batch_time', 'season', 'importer_id', 'operator', 'create_time', 'age', 'settle_time', 'status', 'remarks']]
+        model['status'] = model['status'].apply(lambda x: SampleStatusNames(x).name)
+        model = model[['id', 'batch_time', 'season', 'species', 'age', 'settle_time', 'create_time', 'status', 'remarks']]
         return model
     
     # the callback for updating the datatable
     def _update_datatable(self):
         def update_datatable(store):
-            # if the store contains a dict, a query triggers table refresh 
-            if isinstance(store, list): 
-                self._model = DETECT_DAO.query_processed_tile_samples(*store)
+            # if the store contains a list, a search query triggers table refresh
+            if isinstance(store, list):
+                species_filter = store[6] if len(store) > 6 else None
+                self._model = DETECT_DAO.query_processed_tile_samples(*store[:6])
+                if species_filter:
+                    self._model = self._model[self._model['species'].isin(species_filter)]
             else:
                 self._model = self.get_default_datatable_model()
             self._model = self.refine_datatable_model(self._model, self.allow_priority, self.allow_reprocess)
-            return (self._model.to_dict('records'),)
+            records = self._model.to_dict('records')
+            tooltip_data = [
+                {col: {'value': str(val) if val is not None else '', 'type': 'text'}
+                 for col, val in row.items()}
+                for row in records
+            ]
+            return (records, tooltip_data)
         return update_datatable
     
     def _table_button_pressed(self): 
