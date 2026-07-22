@@ -1,0 +1,154 @@
+# Copyright 2024 - Andrew Kwok Fai LUI, Robotics and Autonomous System Group,
+# Research Engineering Facility, RI
+# the Queensland University of Technology
+
+# CPU-only image for Apple Silicon (arm64/M1-M4) laptops. Parallel to Dockerfile.cpu
+# (the Ubuntu/Linux CPU image) rather than a replacement for it — Dockerfile.cpu and
+# the CUDA Dockerfiles are untouched and remain the supported path on Linux.
+#
+# Differs from Dockerfile.cpu only in the base image and in dropping the UR robot
+# dashboard message package (only needed by cgras_coordinator, not cgras_detector):
+#   - osrf/ros:noetic-desktop-full has no arm64 manifest (verified via
+#     `docker manifest inspect`), so on an M1 it would only run under amd64 emulation.
+#   - ros:noetic-ros-base is a multi-arch image with a native linux/arm64/v8 build,
+#     and already includes actionlib, message_filters and rospkg (verified via
+#     `dpkg -l` inside the image) — everything this package's ROS node needs, without
+#     the desktop-full GUI/RViz/Gazebo packages that cgras_detector never uses.
+
+ARG ROS_DISTRO=noetic
+
+FROM ros:${ROS_DISTRO}-ros-base
+LABEL author="Andrew Lui <luia2@qut.edu.au>"
+
+ARG USER=qcr
+ENV USER=${USER}
+ENV ROS_DISTRO=${ROS_DISTRO}
+
+# update apt-get and add user 'qcr' grant sudo privilege
+RUN apt-get update && \
+    apt-get install -y sudo && \
+    adduser --disabled-password --gecos "" qcr  && \
+    echo "${USER} ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+
+USER ${USER}
+WORKDIR /home/${USER}
+SHELL ["/bin/bash", "-c"]
+ENV CGRAS_WS=/home/${USER}/cgras_ws
+# install cgras workspace
+RUN mkdir -p ${CGRAS_WS}/src
+
+# install base packages
+RUN sudo DEBIAN_FRONTEND=noninteractive apt-get update && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+lsb-release \
+git \
+openssh-server \
+ca-certificates \
+net-tools \
+locales \
+figlet \
+curl \
+iputils-ping \
+vim
+
+RUN git config --global core.editor "vim"
+
+RUN sudo DEBIAN_FRONTEND=noninteractive apt-get update && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+wget \
+software-properties-common \
+dbus \
+htop \
+build-essential \
+cmake \
+gdb
+
+# install python
+RUN sudo add-apt-repository ppa:deadsnakes/ppa
+
+RUN sudo DEBIAN_FRONTEND=noninteractive apt-get update && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+python3-pip \
+python3-rospkg \
+python3-rosdep \
+python3-setuptools \
+python3-tk
+
+# ros-base (unlike osrf/ros:*-desktop-full) does not ship OpenGL/GUI system libraries,
+# which opencv-python's wheel dynamically links against even when only used headlessly.
+# Without these, `import cv2` fails with "libGL.so.1: cannot open shared object file"
+# (verified by reproducing the failure and the fix in a throwaway arm64 container).
+RUN sudo DEBIAN_FRONTEND=noninteractive apt-get update && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+libgl1 \
+libglib2.0-0 \
+libsm6 \
+libxext6 \
+libxrender1 \
+libgomp1
+
+# workspace create and make
+RUN source /opt/ros/${ROS_DISTRO}/setup.bash && \
+cd ${CGRAS_WS} && \
+catkin_make -DPYTHON_EXECUTABLE=/usr/bin/python3
+
+# install python modules
+COPY assets/requirements.txt ${CGRAS_WS}/src/requirements.txt
+# requirements.txt pins `dash>=3.0.*`, which is not a valid PEP 440 specifier (the `.*`
+# suffix is only legal with `==`/`!=`) — modern pip rejects it outright. This is a
+# pre-existing bug in the tracked file (also present in the top-level requirements.txt),
+# not a Mac-specific one; it only "works" on Linux because Dockerfile.cpu never upgrades
+# pip, so that image's old, lenient pip tolerates the malformed specifier. Rather than
+# edit the shared requirements.txt (used by the Linux Dockerfiles too), patch just this
+# image's copy of the file in place.
+RUN sed -i 's/dash>=3\.0\.\*/dash>=3.0/' ${CGRAS_WS}/src/requirements.txt
+# Use `python3 -m pip` (not the bare `pip` command) throughout: apt's python3-pip installs
+# to /usr/lib/python3/dist-packages, and `pip install --upgrade pip` cannot uninstall that
+# copy (it lives outside the /usr/local environment), so the `pip`/`pip3` *console script*
+# keeps resolving to the old pre-upgrade version even though a new one was installed. Only
+# `python3 -m pip` reliably picks up the upgraded version (verified: the stale console-script
+# pip is too old to recognize current arm64 manylinux wheel tags, silently falls back to
+# source sdists, and then fails building them).
+RUN python3 -m pip install --upgrade pip
+# Pre-install pyzmq (pulled in transitively by ipykernel/ipywidgets) using its own
+# prebuilt arm64 wheel. Resolving the full requirements.txt in one pass can otherwise
+# land on an older pyzmq with no aarch64 wheel, which then fails building from source
+# (verified: the isolated build backend's own numpy shim breaks scikit-build-core's
+# `numpy.get_include()` call). Installing it up front satisfies the same >= constraint
+# without ever attempting that source build.
+RUN python3 -m pip install pyzmq
+# Ubuntu's apt-provided PyYAML (a dependency of rospkg/catkin_pkg) is a distutils-installed
+# package, which pip refuses to upgrade in place ("Cannot uninstall PyYAML ... distutils
+# installed project") when requirements.txt asks for pyyaml>=6.0.1. --ignore-installed
+# lets pip shadow it with the pip-managed version instead (verified working end-to-end).
+RUN python3 -m pip install --ignore-installed PyYAML -r ${CGRAS_WS}/src/requirements.txt
+RUN rm ${CGRAS_WS}/src/requirements.txt
+
+# install yolo and pytorch (CPU wheels; arm64 manylinux wheels confirmed available)
+RUN python3 -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+RUN python3 -m pip install networkx==2.8.8 ultralytics
+# ultralytics pulls in opencv-python which overwrites opencv-contrib-python's cv2 binding;
+# reinstall contrib to restore cv2.detail/cv2.imshow API compatibility (mirrors Dockerfile.cpu,
+# but with --force-reinstall --no-deps: without it, pip sees opencv-contrib-python already
+# recorded as installed at this exact version and treats the reinstall as a no-op ("Requirement
+# already satisfied"), so the files opencv-python's uninstall clobbered never actually get
+# restored — verified this leaves BOTH cv2.detail and cv2.imshow missing, breaking the
+# `stitching` package and ultralytics' own import (it does `cv2.imshow` at import time)).
+RUN python3 -m pip uninstall -y opencv-python && python3 -m pip install --force-reinstall --no-deps opencv-contrib-python==4.8.1.78
+
+# complete rosdep installation
+RUN rosdep update
+
+# set locales
+RUN sudo locale-gen en_US.UTF-8
+RUN sudo update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
+ENV LANG=en_US.UTF-8
+ENV LANGUAGE=en_US:en
+ENV LC_ALL=en_US.UTF-8
+
+RUN echo "source banner" >> ~/.bashrc
+RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> ~/.bashrc
+RUN echo "source ${CGRAS_WS}/devel/setup.bash" >> ~/.bashrc
+# install the qcr banner
+COPY assets/banner.sh /usr/local/bin/banner
+# copy and define entry script
+COPY ./entrypoint_setup.sh /usr/local/bin/ros_entrypoint
+RUN sudo chmod +x /usr/local/bin/ros_entrypoint
+ENTRYPOINT ["/usr/local/bin/ros_entrypoint"]
+CMD ["bash"]

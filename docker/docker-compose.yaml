@@ -153,4 +153,54 @@ services:
             - ~/cgras_data:/home/qcr/cgras_data:rw
         command:
             ['/bin/bash', '-c', 'cd /home/qcr/cgras_ws && catkin_make && source /home/qcr/cgras_ws/devel/setup.bash && roslaunch cgras_detector default.launch']
-         
+    # Apple Silicon (arm64/M1-M4) development shell, built from Dockerfile.mac. CPU-only:
+    # no GPU/CUDA and no X11/device passthrough (cgras_detector has no GUI calls on its
+    # running path, only a Dash web UI). Uses published ports instead of network_mode:
+    # host, which Docker Desktop for Mac does not support the way Linux does.
+    cgras-mac:
+        build:
+            context: .
+            dockerfile: Dockerfile.mac
+        image: cgras-mac
+        container_name: cgras-mac
+        stdin_open: true
+        tty: true
+        environment:
+            # NOTE: ROS_MASTER=false here deliberately, even though this container is meant
+            # to be self-contained. entrypoint_setup.sh's ROS_MASTER=true branch runs
+            # `roscore` in the *foreground* (no trailing `&`), which never returns, so the
+            # entrypoint never reaches `exec "$@"` — the actual catkin_make/roslaunch command
+            # in cgras-mac-system's `command:` below never runs (verified: this is exactly why
+            # roscore came up but no cgras_detector nodes ever started). This bug is latent in
+            # the shared entrypoint_setup.sh on Linux too, just never triggered there because
+            # the Linux services all default to ROS_MASTER=false. Rather than edit that shared
+            # script, cgras-mac-system's command starts its own backgrounded `roscore` instead.
+            - ROS_MASTER=false
+            - ROS_MASTER_URI=http://localhost:11311
+        ports:
+            - "8023:8023"
+            - "8024:8024"
+        user: qcr
+        working_dir: /home/qcr
+        volumes:
+            - /etc/timezone:/etc/timezone:ro
+            - /etc/localtime:/etc/localtime:ro
+            - ~/.ssh:/home/qcr/.ssh
+            # NOTE: on this Mac the active workspace lives at ~/Code/cgras_ws/src, not
+            # ~/cgras_ws/src (the convention the Linux services above use) — ~/cgras_ws
+            # exists here too but is a stale, unrelated old checkout. Adjust this prefix
+            # if your Mac's workspace lives somewhere else.
+            - ~/Code/cgras_ws/src/cgras_messages:/home/qcr/cgras_ws/src/cgras_messages:rw
+            - ~/Code/cgras_ws/src/cgras_detector:/home/qcr/cgras_ws/src/cgras_detector:rw
+            - ~/Code/cgras_ws/src/cgras_coordinator:/home/qcr/cgras_ws/src/cgras_coordinator:rw
+            - ~/Code/cgras_ws/src/cgras_datatools:/home/qcr/cgras_ws/src/cgras_datatools:rw
+            - ~/cgras_data:/home/qcr/cgras_data:rw
+        command:
+            bash
+    # the service that runs the cgras systems in the Apple Silicon (arm64/cpu) container
+    cgras-mac-system:
+        extends:
+            service: cgras-mac
+        container_name: cgras-mac-system
+        command:
+            ['/bin/bash', '-c', 'roscore & sleep 5 && cd /home/qcr/cgras_ws && catkin_make && source /home/qcr/cgras_ws/devel/setup.bash && roslaunch cgras_detector default.launch']
