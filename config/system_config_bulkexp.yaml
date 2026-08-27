@@ -58,7 +58,7 @@ cgras_detector:
   reco_working_scale: 0.08                     # the scale at which the reconstruction process operate on the images, default 0.10
   reco_tab_grid_image: True                    # output tab grid annotated images after tile location (working scale always)
   reco_manual_validation_original_scale: True  # output annotated and tab-grid images at original scale for manual validation
-  reco_debug_images_at_original_scaee: False   # output all intermediate reconstruction images at original scale (large disk usage)
+  reco_debug_images_at_original_scale: False   # output all intermediate reconstruction images at original scale (large disk usage)
   reco_debug_feature_matching_images: True
   reco_feature_detectors: ['akaze', 'brisk', 'sift']     # sift, orb, brisk, akaze 
   reco_feature_matching_confidence_threshold: 0.8    # default 1.2
